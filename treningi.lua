@@ -14,7 +14,7 @@ treningi = treningi or {}
 
 do
 
-local PLUGIN_VERSION = "1.0.1m"
+local PLUGIN_VERSION = "1.0.2m"
 local PLUGIN_BUILD   = "24-09-2026"
 
 treningi.version = PLUGIN_VERSION
@@ -460,6 +460,7 @@ local function line(name, x, y, wd, text, fn, container)
   l:setAction(function(t)
     gui.flushFields(name)
     fn(t)
+    zapiszStan()
     gui.render()
   end)
   l:show()
