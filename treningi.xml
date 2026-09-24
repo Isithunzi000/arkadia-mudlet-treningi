@@ -1,0 +1,1228 @@
+<MudletPackage version="1.001">
+	<TriggerPackage />
+	<TimerPackage />
+	<AliasPackage>
+		<Alias isActive="yes" isFolder="no">
+			<name>treningi_alias</name>
+			<script>if treningi and treningi.onAlias then
+  treningi.onAlias()
+end</script>
+			<command />
+			<packageName />
+			<regex>^/treningi$</regex>
+		</Alias>
+		<Alias isActive="yes" isFolder="no">
+			<name>treningi_pomoc_alias</name>
+			<script>if treningi and treningi.onPomoc then
+  treningi.onPomoc()
+end</script>
+			<command />
+			<packageName />
+			<regex>^/treningi\s+(?:pomoc|help)$</regex>
+		</Alias>
+		<Alias isActive="yes" isFolder="no">
+			<name>treningi_tabela_alias</name>
+			<script>if treningi and treningi.onTabela then
+  treningi.onTabela()
+end</script>
+			<command />
+			<packageName />
+			<regex>^/treningi\s+tabela$</regex>
+		</Alias>
+		<Alias isActive="yes" isFolder="no">
+			<name>treningi_aktualizuj_alias</name>
+			<script>if treningi and treningi.onAktualizuj then
+  treningi.onAktualizuj()
+end</script>
+			<command />
+			<packageName />
+			<regex>^/treningi\s+aktualizuj$</regex>
+		</Alias>
+	</AliasPackage>
+	<ActionPackage />
+	<ScriptPackage>
+		<Script isActive="yes" isFolder="no">
+			<name>treningi</name>
+			<eventHandlerList />
+			<script>
+-- treningi - kalkulator cen treningow Arkadii dla Mudleta (port pluginu Dargoth).
+-- Alias /treningi otwiera/zamyka okno kalkulatora. /treningi pomoc - pomoc
+-- w konsoli. /treningi tabela - okno tabeli poziomow maksymalnych wg zawodu.
+-- /treningi aktualizuj - aktualizacja z GitHub Releases.
+--
+-- Model gry: cena treningu z poziomu i na i+1 = max(1, trunc((3i^2-3i+1)*k/100)).
+-- Waluta: 1 mithryl = 100 zl = 24000 mdz; 1 zl = 240 mdz; 1 sr = 12 mdz.
+-- Wszystkie wartosci zweryfikowane pomiarami z gry (287/287 kosztow).
+--
+-- Plugin w pelni zgodny z regulaminem gry - czysty kalkulator, zero automatyki,
+-- zero wysylania komend.
+
+treningi = treningi or {}
+
+do
+
+local PLUGIN_VERSION = "1.0.0m"
+local PLUGIN_BUILD   = "24-09-2026"
+
+treningi.version = PLUGIN_VERSION
+treningi.build   = PLUGIN_BUILD
+
+-- ==========================================================================
+-- SILNIK KOSZTOW (matematyka, dane umiejetnosci) - port 1:1 z Dargoth
+-- ==========================================================================
+
+local MIEDZ_NA_SREBRO = 12
+local MIEDZ_NA_ZLOTO  = 240
+local ZLOTE_NA_MITHRYL = 100
+local MIN_CENA_TRENINGU = 1
+local MAKS_KWOTA  = 999999
+local MAKS_POZIOM = 100
+
+-- Bazowy koszt treningu z poziomu i na i+1 przy k=100%: 3*i*i - 3*i + 1.
+-- Indeks 0 = 0 (wartownik). Gra liczy czystym wzorem (tabela exe miala
+-- 2 literowki: 871@17, 3397@37 - NIE przywracac anomalii).
+local KOSZT_BAZOWY = { [0] = 0 }
+for i = 1, 100 do KOSZT_BAZOWY[i] = 3 * i * i - 3 * i + 1 end
+
+-- Umiejetnosci i procenty ceny (%) - zmierzone z logow gry 2026-08-26,
+-- poza szacowanie (z oryginalnego kalkulatora, niezmierzone).
+local UMIEJETNOSCI = {
+  { nazwa = "akrobatyka", procent = 70 },
+  { nazwa = "alchemia", procent = 70 },
+  { nazwa = "blokowanie wyjscia", procent = 100 },
+  { nazwa = "bronie drzewcowe", procent = 80 },
+  { nazwa = "kieszonkostwo", procent = 70 },
+  { nazwa = "lowiectwo", procent = 50 },
+  { nazwa = "maczugi", procent = 50 },
+  { nazwa = "miecze", procent = 100 },
+  { nazwa = "mierzony cios", procent = 100 },
+  { nazwa = "mloty", procent = 80 },
+  { nazwa = "ocena obiektu", procent = 50 },
+  { nazwa = "ocena przeciwnika", procent = 50 },
+  { nazwa = "opieka nad zwierzetami", procent = 50 },
+  { nazwa = "otwieranie zamkow", procent = 70 },
+  { nazwa = "parowanie", procent = 80 },
+  { nazwa = "plywanie", procent = 50 },
+  { nazwa = "rozkazy", procent = 100 },
+  { nazwa = "skradanie sie", procent = 70 },
+  { nazwa = "spostrzegawczosc", procent = 50 },
+  { nazwa = "szacowanie", procent = 50 },
+  { nazwa = "sztylety", procent = 46 },
+  { nazwa = "tarczownictwo", procent = 80 },
+  { nazwa = "targowanie sie", procent = 50 },
+  { nazwa = "topory", procent = 70 },
+  { nazwa = "tropienie", procent = 50 },
+  { nazwa = "ukrywanie sie", procent = 70 },
+  { nazwa = "uniki", procent = 80 },
+  { nazwa = "walka bez broni", procent = 90 },
+  { nazwa = "walka dwiema bronmi", procent = 100 },
+  { nazwa = "walka pokazowa", procent = 100 },
+  { nazwa = "walka w ciemnosci", procent = 95 },
+  { nazwa = "walka w szyku", procent = 100 },
+  { nazwa = "wspinaczka", procent = 50 },
+  { nazwa = "wyczucie kierunku", procent = 50 },
+  { nazwa = "wykrywanie pulapek", procent = 70 },
+  { nazwa = "zaslanianie", procent = 100 },
+  { nazwa = "zielarstwo", procent = 70 },
+  { nazwa = "znajomosc jezykow", procent = 50 },
+}
+
+-- Pozycje specjalne na liscie (za umiejetnosciami):
+local CIOS_IDX = #UMIEJETNOSCI + 1 -- cios specjalny (umiejetnosc specjalna)
+local INNA_IDX = #UMIEJETNOSCI + 2 -- "inna umiejetnosc..."
+
+-- Cios specjalny: cena zawsze 100% tabeli; maks. 75 bez polecenia
+-- stowarzyszenia, 100 z poleceniem (jedyna kategoria ponad limity zawodow).
+local CIOS_PROCENT  = 100
+local CIOS_MAX_BEZ  = 75
+local CIOS_MAX_Z    = 100
+
+local function naMiedz(zl, sr, mdz)
+  return zl * MIEDZ_NA_ZLOTO + sr * MIEDZ_NA_SREBRO + mdz
+end
+
+-- Rozbicie kwoty w miedzi na mithryl/zloto/srebro/miedz.
+local function zMiedzi(miedzi)
+  local zloteRazem = math.floor(miedzi / MIEDZ_NA_ZLOTO)
+  local reszta = miedzi % MIEDZ_NA_ZLOTO
+  return {
+    miedziRazem = miedzi,
+    mithryl = math.floor(zloteRazem / ZLOTE_NA_MITHRYL),
+    zloto = zloteRazem % ZLOTE_NA_MITHRYL,
+    srebro = math.floor(reszta / MIEDZ_NA_SREBRO),
+    miedz = reszta % MIEDZ_NA_SREBRO,
+  }
+end
+
+-- Cena treningu z poziomu i na i+1 przy procencie ceny k (%).
+-- Dokladnie tak liczy gra: max(1, trunc(KOSZT_BAZOWY[i] * k / 100)).
+local function cenaTreningu(poziom, procentCeny)
+  return math.max(MIN_CENA_TRENINGU,
+                  math.floor(KOSZT_BAZOWY[poziom] * procentCeny / 100))
+end
+
+-- Obecny poziom umiejetnosci na podstawie kosztu treningu.
+-- Pierwszy poziom i z cenaTreningu(i,k) &gt;= koszt; poziom = i+1 dla
+-- 'ostatni', i dla 'nastepny', obciety do 100. Koszt ponad maks -&gt; 100.
+local function obecnyPoziom(zl, sr, mdz, procentCeny, tryb)
+  local miedzi = naMiedz(zl, sr, mdz)
+  for i = 0, MAKS_POZIOM do
+    if cenaTreningu(i, procentCeny) &gt;= miedzi then
+      return math.min(tryb == "ostatni" and i + 1 or i, MAKS_POZIOM)
+    end
+  end
+  return MAKS_POZIOM
+end
+
+-- Laczny koszt treningow w przedziale [od, doo] WLACZNIE; kazdy trening
+-- liczony osobno. maks (opcjonalny): koniec powyzej maksimum obcinany
+-- (wynik.obcietyDo); przedzial w calosci powyzej -&gt; nil. nil tez gdy doo &lt; od.
+local function kosztPrzedzialu(od, doo, procentCeny, maks)
+  if doo - od &lt; 0 then return nil end
+  if maks ~= nil and od &gt; maks then return nil end
+  local doRzeczywiste = maks ~= nil and math.min(doo, maks) or doo
+  local suma = 0
+  for i = od, doRzeczywiste do
+    suma = suma + cenaTreningu(i, procentCeny)
+  end
+  local wynik = zMiedzi(suma)
+  if doRzeczywiste ~= doo then wynik.obcietyDo = doRzeczywiste end
+  return wynik
+end
+
+-- Dowolny wpis uzytkownika -&gt; liczba calkowita z [0, maks].
+-- Biale znaki obcinane; pusty -&gt; 0; przecinek/kropka obcina reszte;
+-- ze smieci zostaja same cyfry ("1 234 mdz" -&gt; 1234); clamp do [0, maks].
+local function sanitizujLiczbe(wpis, maks)
+  local czysty = tostring(wpis or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if czysty == "" then return 0 end
+  local sep = czysty:find("[.,]")
+  local calk = sep and czysty:sub(1, sep - 1) or czysty
+  local cyfry = calk:gsub("%D+", "")
+  if cyfry == "" then return 0 end
+  local n = tonumber(cyfry)
+  if not n then return 0 end
+  n = math.floor(n)
+  if n &lt; 0 then return 0 end
+  if n &gt; maks then return maks end
+  return n
+end
+
+-- Wpis "poziom maksymalny" -&gt; limit albo nil (bez limitu). Pusty, smieci
+-- lub &gt;= 100 = brak limitu. Wartosci 1-99 zwracane jako limit.
+local function limitZWpisu(wpis)
+  local czysty = tostring(wpis or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if czysty == "" then return nil end
+  local sep = czysty:find("[.,]")
+  local calk = sep and czysty:sub(1, sep - 1) or czysty
+  local cyfry = calk:gsub("%D+", "")
+  if cyfry == "" then return nil end
+  local n = tonumber(cyfry)
+  if not n then return nil end
+  if n &gt;= MAKS_POZIOM then return nil end
+  return math.max(1, math.floor(n))
+end
+
+-- Przedzial [od, do] porzadkowany rosnaco.
+local function porzadkujPrzedzial(od, doo)
+  if od &lt;= doo then return od, doo end
+  return doo, od
+end
+
+-- Grupowanie tysiecy (1234567 -&gt; "1 234 567").
+local function formatujLiczbe(n)
+  local s = tostring(n)
+  local r = s:reverse():gsub("(%d%d%d)", "%1 "):reverse()
+  return (r:gsub("^%s", ""))
+end
+
+-- ==========================================================================
+-- POZIOMY MAKSYMALNE WG ZAWODU (dane + limitDla) - port 1:1 z Dargoth
+-- Wartosc -1 = zawod nie oferuje umiejetnosci (kreska w tabeli).
+-- ==========================================================================
+
+local ZAWODY = {
+  "Partyzant", "Fanatyk", "Legionista", "Gladiator", "Korsarz", "Straznik",
+  "Lancknecht", "Nozownik", "Barbarzynca", "Mysliwy", "Kupiec", "Odkrywca",
+  "Gildia Podroznikow",
+}
+local ZAWODY_SKROTY = {
+  "Par", "Fan", "Leg", "Gla", "Kor", "Str", "Lan", "Noz", "Bar", "Mys",
+  "Kup", "Odk", "GP",
+}
+
+local TABELA_POZIOMOW = {
+  { um = "bron", limity = { 70, 74, 71, 75, 73, 74, 71, 72, 71, 65, -1, 60, 30 } },
+  { um = "uniki", limity = { 60, 45, 30, 42, 40, 50, 51, 70, 45, 55, -1, 34, 25 } },
+  { um = "walka dwiema bronmi", limity = { 50, 65, -1, -1, -1, -1, -1, 55, -1, -1, -1, -1, 19 } },
+  { um = "tarczownictwo", limity = { -1, -1, 75, 60, 71, -1, -1, -1, -1, -1, -1, -1, 25 } },
+  { um = "parowanie", limity = { 40, 45, 50, 41, -1, 71, 71, -1, 55, -1, -1, 45, 25 } },
+  { um = "zaslanianie", limity = { 45, 46, 41, 40, 60, 60, 40, 40, 41, -1, -1, -1, 20 } },
+  { um = "blokowanie wyjscia", limity = { 38, 44, -1, -1, 41, 55, -1, 51, 45, -1, -1, -1, 20 } },
+  { um = "rozkazy", limity = { 30, -1, 55, 30, 40, 50, 55, -1, -1, -1, -1, -1, 15 } },
+  { um = "walka w szyku", limity = { -1, 35, 75, 35, 45, 55, 50, -1, 31, -1, -1, -1, 15 } },
+  { um = "walka bez broni", limity = { -1, -1, 60, 55, 55, -1, -1, -1, 60, -1, -1, -1, 17 } },
+  { um = "walka w ciemnosci", limity = { -1, -1, 60, 55, 55, -1, -1, -1, -1, -1, -1, -1, 15 } },
+  { um = "ukrywanie", limity = { 80, -1, -1, -1, -1, -1, -1, 70, -1, 80, -1, -1, 30 } },
+  { um = "skradanie", limity = { 80, -1, -1, -1, -1, -1, -1, 70, -1, 80, -1, -1, 24 } },
+  { um = "tropienie", limity = { 60, 50, -1, -1, -1, -1, -1, -1, -1, 75, -1, -1, 30 } },
+  { um = "zielarstwo", limity = { -1, -1, -1, -1, -1, -1, -1, -1, -1, 59, 55, 41, 18 } },
+  { um = "spostrzegawczosc", limity = { 70, -1, -1, -1, -1, 65, -1, 70, -1, 75, 60, 71, 50 } },
+  { um = "wyczucie kierunku", limity = { 60, -1, -1, -1, 45, -1, -1, -1, -1, 60, -1, 84, 30 } },
+  { um = "plywanie", limity = { 55, -1, -1, -1, 85, -1, -1, -1, -1, 55, -1, 71, 42 } },
+  { um = "wspinaczka", limity = { 60, -1, -1, -1, 60, -1, -1, -1, -1, 60, -1, 71, 50 } },
+  { um = "ocena przeciwnika", limity = { -1, 50, 65, 85, 60, 65, 65, 85, 55, 54, 50, 50, 21 } },
+  { um = "ocena obiektu", limity = { -1, -1, 50, 50, 45, 55, 50, 50, 35, 40, 85, 41, 21 } },
+  { um = "lowiectwo", limity = { 40, -1, -1, -1, -1, -1, -1, -1, -1, 77, -1, 41, 25 } },
+  { um = "opieka nad zwierzetami", limity = { -1, -1, -1, -1, -1, -1, -1, -1, -1, 74, -1, 44, 24 } },
+  { um = "wykrywanie pulapek", limity = { -1, -1, -1, -1, -1, -1, -1, -1, -1, 55, -1, 55, 22 } },
+  { um = "otwieranie zamkow", limity = { -1, -1, -1, -1, -1, -1, -1, 50, -1, -1, -1, -1, 15 } },
+  { um = "znajomosc jezykow", limity = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 70, 85, 40 } },
+  { um = "targowanie sie", limity = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 55, 42, 30 } },
+  { um = "szacowanie", limity = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 80, 50, 30 } },
+  { um = "alchemia", limity = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 20 } },
+  { um = "akrobatyka", limity = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 13 } },
+}
+
+local function znajdzWiersz(um)
+  for _, w in ipairs(TABELA_POZIOMOW) do
+    if w.um == um then return w end
+  end
+  return nil
+end
+
+local function indexZawodu(zawod)
+  for i, z in ipairs(ZAWODY) do
+    if z == zawod then return i end
+  end
+  return nil
+end
+
+-- Poziom maksymalny umiejetnosci dla sytuacji postaci.
+-- zawod = nil -&gt; czyste GP. Zawod oferuje: z poleceniem = wartosc zawodu,
+-- bez = GP + 75% roznicy (zaokraglone). Nie oferuje (kreska) -&gt; jak GP.
+-- Nieznana umiejetnosc -&gt; nil.
+local function limitDla(um, zawod, polecenie)
+  local w = znajdzWiersz(um)
+  if not w then return nil end
+  local gp = w.limity[#ZAWODY]
+  if gp &lt; 0 then return nil end
+  if zawod == nil then return gp end
+  local idx = indexZawodu(zawod)
+  if not idx then return nil end
+  local z = w.limity[idx]
+  if z &lt; 0 then return gp end
+  if polecenie then return z end
+  return math.floor(gp + 0.75 * (z - gp) + 0.5)
+end
+
+-- Limit do wyswietlenia w tabeli zawodow: { wartosc, przyblizona } albo nil.
+-- Z poleceniem: dokladna. Bez: GP i kreski dokladne, reszta przyblizona.
+local function limitWyswietlany(um, zawod, polecenie)
+  local w = znajdzWiersz(um)
+  if not w then return nil end
+  local idx = indexZawodu(zawod)
+  if not idx then return nil end
+  local gp = w.limity[#ZAWODY]
+  if gp &lt; 0 then return nil end
+  local z = w.limity[idx]
+  local czyGP = idx == #ZAWODY
+  if polecenie then
+    local v = z &gt;= 0 and z or gp
+    return { wartosc = v, przyblizona = false }
+  end
+  if czyGP or z &lt; 0 then
+    return { wartosc = gp, przyblizona = false }
+  end
+  return { wartosc = math.floor(gp + 0.75 * (z - gp) + 0.5), przyblizona = true }
+end
+
+-- ==========================================================================
+-- STAN (zapis na dysku profilu, jak w kalendarzach/truwerze)
+-- ==========================================================================
+
+local STAN_PATH = getMudletHomeDir() .. "/treningi_stan_v1.lua"
+
+local STAN_DOMYSLNY = {
+  umiejetnosc = -1,        -- indeks w UMIEJETNOSCI; -1 = nic; CIOS/INNA_IDX
+  tryb = "ostatni",        -- "ostatni" | "nastepny"
+  zloto = "", srebro = "", miedz = "",
+  od = "", doo = "",
+  innaProcent = "100",     -- procent ceny dla "innej umiejetnosci" (1-100)
+  innaMaxPoziom = "",      -- poziom maksymalny dla "innej" (pusty = bez limitu)
+  polecenie = false,       -- cios specjalny: z poleceniem stowarzyszenia
+}
+
+local stan = { filtr = "" }
+for k, v in pairs(STAN_DOMYSLNY) do stan[k] = v end
+
+local function wczytajStan()
+  local t = {}
+  local ok, res = pcall(table.load, STAN_PATH, t)
+  if not (ok and res and type(t) == "table") then return end
+  if type(t.umiejetnosc) == "number"
+     and t.umiejetnosc &gt;= 0 and t.umiejetnosc &lt;= INNA_IDX then
+    stan.umiejetnosc = t.umiejetnosc
+  end
+  if t.tryb == "nastepny" or t.tryb == "ostatni" then stan.tryb = t.tryb end
+  for _, k in ipairs({ "zloto", "srebro", "miedz", "od", "doo" }) do
+    if type(t[k]) == "string" then stan[k] = t[k] end
+  end
+  if type(t.innaProcent) == "string"
+     and sanitizujLiczbe(t.innaProcent, 100) &gt;= 1 then
+    stan.innaProcent = tostring(sanitizujLiczbe(t.innaProcent, 100))
+  end
+  if type(t.innaMaxPoziom) == "string" and limitZWpisu(t.innaMaxPoziom) ~= nil then
+    stan.innaMaxPoziom = tostring(limitZWpisu(t.innaMaxPoziom))
+  end
+  stan.polecenie = t.polecenie == true
+end
+
+local function zapiszStan()
+  local t = {}
+  for k in pairs(STAN_DOMYSLNY) do t[k] = stan[k] end
+  pcall(table.save, STAN_PATH, t)
+end
+
+local function aktualnyProcent()
+  if stan.umiejetnosc == INNA_IDX then
+    return math.max(1, sanitizujLiczbe(stan.innaProcent, 100))
+  end
+  if stan.umiejetnosc == CIOS_IDX then return CIOS_PROCENT end
+  local u = UMIEJETNOSCI[stan.umiejetnosc]
+  return u and u.procent or 100
+end
+
+-- Poziom maksymalny dla wybranej pozycji; nil = bez limitu.
+local function aktualnyMaks()
+  if stan.umiejetnosc == INNA_IDX then return limitZWpisu(stan.innaMaxPoziom) end
+  if stan.umiejetnosc == CIOS_IDX then
+    return stan.polecenie and CIOS_MAX_Z or CIOS_MAX_BEZ
+  end
+  return nil
+end
+
+local function nazwaWybranej()
+  if stan.umiejetnosc == CIOS_IDX then return "cios specjalny" end
+  if stan.umiejetnosc == INNA_IDX then return "inna umiejetnosc" end
+  local u = UMIEJETNOSCI[stan.umiejetnosc]
+  return u and u.nazwa or ""
+end
+
+-- ==========================================================================
+-- GUI (Geyser; wzorzec truwer/pasek: Adjustable.Container + pulowane widgety)
+-- ==========================================================================
+
+local gui = { managed = {}, fields = {}, rows = {}, open = false,
+              tabOpen = false, tabPolecenie = true }
+treningi.gui = gui
+
+-- Paleta spojna z truwer/pasek: ciemne pola, jasny tekst, wyrazne role.
+local STYLE = {
+  btn     = "background-color:#3a4150;color:#e8ebf0;border:1px solid #5a6478;border-radius:3px;",
+  primary = "background-color:#2e5d8c;color:#ffffff;border:1px solid #4a80b4;border-radius:3px;",
+  field   = "background-color:#20242c;color:#e8ebf0;border:1px solid #5a6478;",
+  title   = "color:#f0f3f8;background-color:transparent;",
+  meta    = "color:#9aa4b5;background-color:transparent;",
+  lbl     = "color:#aeb8c8;background-color:transparent;",
+  nota    = "color:#e0b85c;font-style:italic;background-color:transparent;",
+  row     = "background-color:#20242c;color:#dde3ee;border-bottom:1px solid #2a2f3a;",
+  rowSpec = "background-color:#20242c;color:#e0b85c;border-bottom:1px solid #2a2f3a;",
+  rowSel  = "background-color:#2e5d8c;color:#ffffff;border-bottom:1px solid #2a2f3a;",
+  panel   = "background-color:#1d2230;color:#7fb4ff;font-size:18pt;font-weight:bold;border:1px solid #3d4356;border-radius:4px;",
+  panelLbl= "color:#9aa4b5;background-color:transparent;",
+  mth     = "background-color:#2c3d66;color:#9fc0ff;border-radius:3px;",
+  zl      = "background-color:#4d4020;color:#ffd766;border-radius:3px;",
+  sr      = "background-color:#3c3c46;color:#d5d5e0;border-radius:3px;",
+  mz      = "background-color:#4a3128;color:#e8a87c;border-radius:3px;",
+  footlink= "color:#9aa4b5;background-color:transparent;border:none;text-align:left;",
+}
+
+-- Granice wnetrza okna (jak w truwerze, zmierzone na zywym kliencie):
+-- Inside ma 620 px szerokosci, dolna widoczna granica tresci to y+h =&lt; 540.
+local RIGHT_EDGE  = 620
+local FOOTER_Y    = 514
+
+local function applyStyle(l, css)
+  if l and type(l.setStyleSheet) == "function" then l:setStyleSheet(css) end
+end
+
+local function mk(name, x, y, wd, h, container)
+  local l = gui.managed[name]
+  if not l then
+    l = Geyser.Label:new({ name = name, x = x, y = y, width = wd, height = h },
+                         container or gui.win)
+    gui.managed[name] = l
+  else
+    l:move(x, y)
+    l:resize(wd, h)
+  end
+  return l
+end
+
+local function setText(name, s)
+  echo(name, s)
+end
+
+local function txt(name, x, y, wd, h, text, container, style)
+  local l = mk(name, x, y, wd, h, container)
+  setText(name, text)
+  if style then applyStyle(l, style) end
+  l:show()
+  return l
+end
+
+-- Klik dowolnego przycisku najpierw splukuje pola (wpis bez Entera trafia
+-- do stanu), dopiero potem wykonuje akcje (jak w truwerze).
+local function btn(name, x, y, wd, label, fn, container, style)
+  local l = mk(name, x, y, wd, 24, container)
+  setText(name, label)
+  applyStyle(l, style or STYLE.btn)
+  l:setClickCallback(function()
+    gui.flushFields()
+    fn()
+  end)
+  l:show()
+  return l
+end
+
+local function mkLine(name, x, y, wd, h, container)
+  local l = gui.managed[name]
+  if not l then
+    l = Geyser.CommandLine:new({ name = name, x = x, y = y, width = wd, height = h },
+                               container or gui.win)
+    gui.managed[name] = l
+  else
+    l:move(x, y)
+    l:resize(wd, h)
+  end
+  return l
+end
+
+-- Linia z tekstem poczatkowym i commitem na Enter (setAction).
+local function line(name, x, y, wd, text, fn, container)
+  local l = mkLine(name, x, y, wd, 24, container)
+  applyStyle(l, STYLE.field)
+  l:print(text)
+  l:setAction(function(t)
+    gui.flushFields(name)
+    fn(t)
+    gui.render()
+  end)
+  l:show()
+  return l
+end
+
+-- Rejestr pol do splukiwania: commit zapisuje do stanu i odswieza.
+local function pole(name, x, y, wd, text, commit, container)
+  gui.fields[name] = { value = text, commit = commit }
+  return line(name, x, y, wd, text, function(t)
+    commit(t)
+    gui.fields[name].value = t
+  end, container)
+end
+
+function gui.flushFields(exceptName)
+  for name, f in pairs(gui.fields) do
+    if name ~= exceptName then
+      local w = gui.managed[name]
+      if w and type(w.getText) == "function" then
+        local ok, t = pcall(w.getText, w)
+        if ok and type(t) == "string" and t ~= f.value then
+          f.commit(t)
+          f.value = t
+        end
+      end
+    end
+  end
+end
+
+-- ---------------------------------------------------------------------------
+-- Lista umiejetnosci (ScrollBox, filtr, pozycje specjalne na koncu)
+-- ---------------------------------------------------------------------------
+
+local ROW_H = 22
+
+local function wpisyListy()
+  local f = string.lower(stan.filtr or "")
+  local out = {}
+  for i, u in ipairs(UMIEJETNOSCI) do
+    if f == "" or string.find(string.lower(u.nazwa), f, 1, true) then
+      out[#out + 1] = { idx = i, nazwa = u.nazwa, procent = u.procent }
+    end
+  end
+  if f == "" or string.find("cios specjalny", f, 1, true) then
+    out[#out + 1] = { idx = CIOS_IDX, nazwa = "cios specjalny", procent = CIOS_PROCENT }
+  end
+  if f == "" or string.find("inna umiejetnosc", f, 1, true) then
+    out[#out + 1] = { idx = INNA_IDX, nazwa = "inna umiejetnosc...", procent = nil }
+  end
+  return out
+end
+
+local function renderLista()
+  if not gui.lista then return end
+  local wpisy = wpisyListy()
+  for i, w in ipairs(wpisy) do
+    local name = "trng.row." .. i
+    local l = gui.rows[i]
+    if not l then
+      l = Geyser.Label:new({ name = name, x = 0, y = (i - 1) * ROW_H,
+                             width = "100%", height = ROW_H }, gui.lista)
+      gui.rows[i] = l
+    else
+      l:move(0, (i - 1) * ROW_H)
+    end
+    local opis = w.nazwa .. (w.procent and ("  (k=" .. w.procent .. "%)") or "")
+    l:echo(opis)
+    if w.idx == stan.umiejetnosc then
+      applyStyle(l, STYLE.rowSel)
+    elseif w.idx &gt;= CIOS_IDX then
+      applyStyle(l, STYLE.rowSpec)
+    else
+      applyStyle(l, STYLE.row)
+    end
+    local idx = w.idx
+    l:setClickCallback(function()
+      gui.flushFields()
+      stan.umiejetnosc = idx
+      zapiszStan()
+      gui.odswiez()
+    end)
+    l:show()
+  end
+  for i = #wpisy + 1, #gui.rows do
+    gui.rows[i]:hide()
+  end
+end
+
+-- ---------------------------------------------------------------------------
+-- Odswiezenie wynikow ze stanu (jak aktualizuj() w Dargoth)
+-- ---------------------------------------------------------------------------
+
+local function setLbl(name, text)
+  local l = gui.managed[name]
+  if l then l:echo(text) end
+end
+
+local function showLbl(name, on)
+  local l = gui.managed[name]
+  if not l then return end
+  if on then l:show() else l:hide() end
+end
+
+function gui.odswiez()
+  renderLista()
+
+  local czyInna = stan.umiejetnosc == INNA_IDX
+  local czyCios = stan.umiejetnosc == CIOS_IDX
+  showLbl("trng.innaProc.lbl", czyInna)
+  showLbl("trng.innaProc", czyInna)
+  showLbl("trng.innaMax.lbl", czyInna)
+  showLbl("trng.innaMax", czyInna)
+  showLbl("trng.ciosPol", czyCios)
+
+  if stan.umiejetnosc &lt; 0 then
+    setLbl("trng.poziom", "-")
+    setLbl("trng.podpowiedz", "Wybierz umiejetnosc z listy powyzej.")
+    showLbl("trng.podpowiedz", true)
+    showLbl("trng.wybrana", false)
+    for _, n in ipairs({ "trng.mth", "trng.zl", "trng.sr", "trng.mz",
+                         "trng.razem", "trng.notka" }) do
+      showLbl(n, false)
+    end
+    return
+  end
+
+  local k = aktualnyProcent()
+  setLbl("trng.wybrana", "Wybrana: " .. nazwaWybranej() ..
+         "  -  " .. k .. "% ceny bazowej")
+  showLbl("trng.wybrana", true)
+  showLbl("trng.podpowiedz", false)
+
+  local zl = sanitizujLiczbe(stan.zloto, MAKS_KWOTA)
+  local sr = sanitizujLiczbe(stan.srebro, MAKS_KWOTA)
+  local mz = sanitizujLiczbe(stan.miedz, MAKS_KWOTA)
+  local poziom = obecnyPoziom(zl, sr, mz, k, stan.tryb)
+  setLbl("trng.poziom", poziom .. "%")
+
+  local od = sanitizujLiczbe(stan.od, MAKS_POZIOM)
+  local doo = sanitizujLiczbe(stan.doo, MAKS_POZIOM)
+  local odP, doP = porzadkujPrzedzial(od, doo)
+  local maks = aktualnyMaks()
+  local wynik = kosztPrzedzialu(odP, doP, k, maks)
+
+  if not wynik then
+    for _, n in ipairs({ "trng.mth", "trng.zl", "trng.sr", "trng.mz",
+                         "trng.razem" }) do
+      showLbl(n, false)
+    end
+    if maks ~= nil and odP &gt; maks then
+      setLbl("trng.notka", "Ten zakres jest poza zasiegiem - poziom maksymalny to " ..
+             maks .. "%.")
+      showLbl("trng.notka", true)
+    else
+      showLbl("trng.notka", false)
+    end
+    return
+  end
+
+  local chips = {
+    { "trng.mth", wynik.mithryl, "mth" },
+    { "trng.zl", wynik.zloto, "zl" },
+    { "trng.sr", wynik.srebro, "sr" },
+    { "trng.mz", wynik.miedz, "mdz" },
+  }
+  local puste = true
+  for _, c in ipairs(chips) do
+    if c[2] &gt; 0 then
+      setLbl(c[1], " " .. formatujLiczbe(c[2]) .. " " .. c[3] .. " ")
+      showLbl(c[1], true)
+      puste = false
+    else
+      showLbl(c[1], false)
+    end
+  end
+  if puste then
+    setLbl("trng.mz", " 0 mdz ")
+    showLbl("trng.mz", true)
+  end
+
+  setLbl("trng.razem", "razem: " .. formatujLiczbe(wynik.miedziRazem) .. " mdz")
+  showLbl("trng.razem", true)
+
+  if wynik.obcietyDo ~= nil then
+    setLbl("trng.notka", "poziom maksymalny to " .. wynik.obcietyDo ..
+           "% - policzono " .. odP .. "% -&gt; " .. wynik.obcietyDo .. "%")
+    showLbl("trng.notka", true)
+  elseif od ~= odP or doo ~= doP then
+    setLbl("trng.notka", "policzono " .. odP .. "% -&gt; " .. doP .. "%")
+    showLbl("trng.notka", true)
+  else
+    showLbl("trng.notka", false)
+  end
+end
+
+-- ---------------------------------------------------------------------------
+-- Budowa okna kalkulatora
+-- ---------------------------------------------------------------------------
+
+local function trybBtnRefresh()
+  local a = gui.managed["trng.tryb.ostatni"]
+  local b = gui.managed["trng.tryb.nastepny"]
+  if a then applyStyle(a, stan.tryb == "ostatni" and STYLE.primary or STYLE.btn) end
+  if b then applyStyle(b, stan.tryb == "nastepny" and STYLE.primary or STYLE.btn) end
+end
+
+local function ciosBtnRefresh()
+  local l = gui.managed["trng.ciosPol"]
+  if not l then return end
+  l:echo("Polecenie stowarzyszenia: " .. (stan.polecenie and "TAK" or "NIE") ..
+         "  (maks. " .. (stan.polecenie and CIOS_MAX_Z or CIOS_MAX_BEZ) .. "%)")
+  applyStyle(l, stan.polecenie and STYLE.primary or STYLE.btn)
+end
+
+function gui.render()
+  if not gui.win then return end
+
+  -- Filtr listy + wybrana pozycja
+  pole("trng.filtr", 10, 4, 290, stan.filtr or "", function(t)
+    stan.filtr = t
+    renderLista()
+  end)
+  txt("trng.wybrana", 310, 4, 300, 24, "", gui.win, STYLE.lbl)
+
+  -- Lista umiejetnosci
+  if not gui.lista then
+    gui.lista = Geyser.ScrollBox:new({ name = "trng.lista", x = 10, y = 32,
+                                       width = 600, height = 150 }, gui.win)
+    applyStyle(gui.lista, "background-color:#1a1e26;")
+  end
+  renderLista()
+
+  -- Sekcja: koszt treningu -&gt; poziom
+  txt("trng.sec1", 10, 188, 400, 16, "KOSZT TRENINGU -&gt; POZIOM", gui.win, STYLE.meta)
+  txt("trng.zl.lbl", 10, 206, 193, 14, "zloto (zl)", gui.win, STYLE.lbl)
+  txt("trng.sr.lbl", 213, 206, 193, 14, "srebro (sr)", gui.win, STYLE.lbl)
+  txt("trng.mz.lbl", 416, 206, 194, 14, "miedz (mdz)", gui.win, STYLE.lbl)
+  pole("trng.zl", 10, 222, 193, stan.zloto, function(t) stan.zloto = t end)
+  pole("trng.sr", 213, 222, 193, stan.srebro, function(t) stan.srebro = t end)
+  pole("trng.mz", 416, 222, 194, stan.miedz, function(t) stan.miedz = t end)
+
+  -- Tryb kosztu (ostatni/nastepny)
+  btn("trng.tryb.ostatni", 10, 252, 297, "Podany koszt: ostatni trening",
+      function() stan.tryb = "ostatni"; zapiszStan(); gui.odswiez(); trybBtnRefresh() end)
+  btn("trng.tryb.nastepny", 313, 252, 297, "Podany koszt: nastepny trening",
+      function() stan.tryb = "nastepny"; zapiszStan(); gui.odswiez(); trybBtnRefresh() end)
+  trybBtnRefresh()
+
+  -- Wynik poziomu
+  txt("trng.poziom", 10, 282, 600, 46, "-", gui.win, STYLE.panel)
+  txt("trng.podpowiedz", 10, 332, 600, 18, "", gui.win, STYLE.meta)
+
+  -- Sekcja: koszt przedzialu
+  txt("trng.sec2", 10, 356, 400, 16, "KOSZT PRZEDZIALU TRENINGOW", gui.win, STYLE.meta)
+  txt("trng.od.lbl", 10, 374, 290, 14, "z poziomu (%)", gui.win, STYLE.lbl)
+  txt("trng.do.lbl", 320, 374, 290, 14, "na poziom (%)", gui.win, STYLE.lbl)
+  btn("trng.od.minus", 10, 390, 26, "-", function()
+    stan.od = tostring(math.max(0, sanitizujLiczbe(stan.od, MAKS_POZIOM) - 1))
+    zapiszStan(); gui.render()
+  end)
+  pole("trng.od", 40, 390, 90, stan.od, function(t) stan.od = t end)
+  btn("trng.od.plus", 134, 390, 26, "+", function()
+    stan.od = tostring(math.min(MAKS_POZIOM, sanitizujLiczbe(stan.od, MAKS_POZIOM) + 1))
+    zapiszStan(); gui.render()
+  end)
+  btn("trng.do.minus", 320, 390, 26, "-", function()
+    stan.doo = tostring(math.max(0, sanitizujLiczbe(stan.doo, MAKS_POZIOM) - 1))
+    zapiszStan(); gui.render()
+  end)
+  pole("trng.do", 350, 390, 90, stan.doo, function(t) stan.doo = t end)
+  btn("trng.do.plus", 444, 390, 26, "+", function()
+    stan.doo = tostring(math.min(MAKS_POZIOM, sanitizujLiczbe(stan.doo, MAKS_POZIOM) + 1))
+    zapiszStan(); gui.render()
+  end)
+
+  -- Wiersz dynamiczny: inna umiejetnosc / cios specjalny
+  txt("trng.innaProc.lbl", 10, 422, 200, 14, "procent ceny (1-100)", gui.win, STYLE.lbl)
+  pole("trng.innaProc", 10, 438, 90, stan.innaProcent, function(t)
+    stan.innaProcent = t
+  end)
+  txt("trng.innaMax.lbl", 320, 422, 250, 14, "poziom maksymalny (pusty = bez limitu)",
+      gui.win, STYLE.lbl)
+  pole("trng.innaMax", 320, 438, 90, stan.innaMaxPoziom, function(t)
+    stan.innaMaxPoziom = t
+  end)
+  btn("trng.ciosPol", 10, 422, 400, "", function()
+    stan.polecenie = not stan.polecenie
+    zapiszStan(); ciosBtnRefresh(); gui.odswiez()
+  end)
+  ciosBtnRefresh()
+
+  -- Wynik przedzialu: nominaly + razem + notka
+  txt("trng.mth", 10, 470, 140, 24, "", gui.win, STYLE.mth)
+  txt("trng.zl", 158, 470, 140, 24, "", gui.win, STYLE.zl)
+  txt("trng.sr", 306, 470, 140, 24, "", gui.win, STYLE.sr)
+  txt("trng.mz", 454, 470, 156, 24, "", gui.win, STYLE.mz)
+  txt("trng.razem", 10, 498, 300, 16, "", gui.win, STYLE.lbl)
+  txt("trng.notka", 320, 498, 290, 16, "", gui.win, STYLE.nota)
+
+  -- Stopka: pomoc, tabela, wersja
+  btn("trng.pomoc", 10, FOOTER_Y, 80, "Pomoc", function() treningi.onPomoc() end)
+  btn("trng.tabela", 98, FOOTER_Y, 80, "Tabela", function() treningi.onTabela() end)
+  btn("trng.footer", 300, FOOTER_Y, 310,
+      "v" .. PLUGIN_VERSION .. " | " .. PLUGIN_BUILD,
+      function() treningi.updaterCheck(true) end, nil, STYLE.footlink)
+  local f = gui.managed["trng.footer"]
+  if f and type(f.setToolTip) == "function" then
+    f:setToolTip("Kliknij, aby sprawdzic aktualizacje")
+  end
+
+  gui.odswiez()
+end
+
+function gui.build()
+  if gui.win then return end
+  gui.win = Adjustable.Container:new({
+    name = "treningi",
+    x = 40, y = 40, width = 640, height = 560,
+    titleText = "Treningi - kalkulator cen treningow",
+    titleTxtColor = "#f0f3f8",
+    titleFormat = "lb14",
+  })
+  gui.win:hide() -- start ukryty (jak zamkniety popup w Dargoth)
+  gui.render()
+end
+
+function gui.toggle()
+  if not gui.win then return end
+  if gui.open then
+    gui.flushFields() -- zamkniecie splukuje pola: wpis bez Entera nie ginie
+    zapiszStan()
+    gui.open = false
+    gui.win:hide()
+    return
+  end
+  gui.open = true
+  gui.render()
+  gui.win:show()
+end
+
+-- ---------------------------------------------------------------------------
+-- Okno tabeli poziomow maksymalnych wg zawodu
+-- ---------------------------------------------------------------------------
+
+local TAB_NAME_W = 26
+local TAB_CELL_W = 5
+
+local function padRight(s, w)
+  s = tostring(s)
+  local len = 0
+  for _ in s:gmatch("[\1-\127\194-\244][\128-\191]*") do len = len + 1 end
+  if len &gt;= w then return s end
+  return s .. string.rep(" ", w - len)
+end
+
+local function cellTxt(v, przybl)
+  if v == nil then return padRight("-", TAB_CELL_W) end
+  local s = tostring(v) .. (przybl and "~" or "")
+  return padRight(s, TAB_CELL_W)
+end
+
+local function renderTabela()
+  if not gui.tabcon then return end
+  gui.tabcon:clear()
+  local pol = gui.tabPolecenie
+  gui.tabcon:cecho("&lt;yellow&gt;" .. padRight("umiejetnosc", TAB_NAME_W))
+  for i = 1, #ZAWODY_SKROTY do
+    local skrot = padRight(ZAWODY_SKROTY[i], TAB_CELL_W)
+    if i == #ZAWODY_SKROTY then
+      gui.tabcon:cecho("&lt;cyan&gt;" .. skrot)
+    else
+      gui.tabcon:cecho("&lt;white&gt;" .. skrot)
+    end
+  end
+  gui.tabcon:echo("\n")
+  gui.tabcon:cecho("&lt;dark_grey&gt;" .. string.rep("-", TAB_NAME_W + #ZAWODY_SKROTY * TAB_CELL_W) .. "\n")
+  for _, w in ipairs(TABELA_POZIOMOW) do
+    gui.tabcon:cecho("&lt;white&gt;" .. padRight(w.um, TAB_NAME_W))
+    for i = 1, #ZAWODY do
+      local lw = limitWyswietlany(w.um, ZAWODY[i], pol)
+      local cell
+      local color = "&lt;light_slate_grey&gt;"
+      if i == #ZAWODY then color = "&lt;cyan&gt;" end
+      if lw and lw.przyblizona then color = "&lt;steel_blue&gt;" end
+      if not lw then
+        cell = cellTxt(nil)
+      else
+        cell = cellTxt(lw.wartosc, lw.przyblizona and not pol)
+      end
+      gui.tabcon:cecho(color .. cell)
+    end
+    gui.tabcon:echo("\n")
+  end
+  gui.tabcon:cecho("\n&lt;dark_grey&gt;Legenda: " .. table.concat(ZAWODY_SKROTY, " ") .. "\n")
+  for i = 1, #ZAWODY do
+    gui.tabcon:cecho("&lt;dark_grey&gt;" .. ZAWODY_SKROTY[i] .. " = " .. ZAWODY[i] .. "\n")
+  end
+  gui.tabcon:cecho("&lt;dark_grey&gt;~ = wartosc przyblizona (GP + 75% roznicy, zaokraglone); "
+                   .. "- = zawod nie oferuje umiejetnosci (liczone jak GP).\n")
+  gui.tabcon:cecho("&lt;dark_grey&gt;Tryb: " .. (pol and "z poleceniem stowarzyszenia"
+                   or "bez polecenia") .. "\n")
+end
+
+local function tabBtnRefresh()
+  local a = gui.managed["trng.tab.bez"]
+  local b = gui.managed["trng.tab.z"]
+  if a then applyStyle(a, (not gui.tabPolecenie) and STYLE.primary or STYLE.btn) end
+  if b then applyStyle(b, gui.tabPolecenie and STYLE.primary or STYLE.btn) end
+end
+
+function gui.buildTabela()
+  if gui.tabwin then return end
+  gui.tabwin = Adjustable.Container:new({
+    name = "treningi_tabela",
+    x = 90, y = 30, width = 700, height = 600,
+    titleText = "Treningi - poziomy maksymalne wg zawodu",
+    titleTxtColor = "#f0f3f8",
+    titleFormat = "lb14",
+  })
+  btn("trng.tab.bez", 10, 4, 200, "bez polecenia", function()
+    gui.tabPolecenie = false
+    tabBtnRefresh(); renderTabela()
+  end, gui.tabwin)
+  btn("trng.tab.z", 218, 4, 200, "z poleceniem", function()
+    gui.tabPolecenie = true
+    tabBtnRefresh(); renderTabela()
+  end, gui.tabwin)
+  gui.tabcon = Geyser.MiniConsole:new({
+    name = "trng.tabcon", x = 10, y = 34, width = 670, height = 540,
+  }, gui.tabwin)
+  pcall(function() gui.tabcon:setFont("Monospace") end)
+  pcall(function() gui.tabcon:setFontSize(10) end)
+  tabBtnRefresh()
+  renderTabela()
+  gui.tabwin:hide()
+end
+
+function gui.toggleTabela()
+  gui.buildTabela()
+  if gui.tabOpen then
+    gui.tabOpen = false
+    gui.tabwin:hide()
+    return
+  end
+  gui.tabOpen = true
+  renderTabela()
+  gui.tabwin:show()
+end
+
+-- ==========================================================================
+-- AKTUALIZATOR (wzorzec kalendarzy: auto-check throttled 8 h, reczna
+-- instalacja komenda; stale nazwy assetow, sprzatanie historycznych nazw)
+-- ==========================================================================
+
+local C_HEADER = "&lt;yellow&gt;"
+local C_NOW    = "&lt;green&gt;"
+local C_RESET  = "&lt;reset&gt;"
+
+local function safeCecho(s)
+  if cecho then cecho(s) else io.write((s:gsub("&lt;%a+&gt;", ""))) end
+end
+
+local UPDATE_REPO         = "arkadia-mudlet-treningi"
+local UPDATE_PKG_NAME     = "treningi"
+local UPDATE_CMD          = "/treningi aktualizuj"
+local UPDATE_THROTTLE_SEC = 8 * 3600
+local UPDATE_API_URL      = "https://api.github.com/repos/Isithunzi000/" .. UPDATE_REPO .. "/releases/latest"
+local UPDATE_CACHE_PATH   = getMudletHomeDir() .. "/treningi_update_cache.lua"
+-- Historyczne nazwy paczek na mudlet-web (tozsamosc = nazwa pliku):
+-- dawniej &lt;pkg&gt;_update; self = kamizelka na lokalne buildy.
+local UPDATE_LEGACY_PKGS = {
+  "treningi_update",
+  "treningi_" .. PLUGIN_VERSION:gsub("%.", "_"),
+}
+
+local updateDlHandlers = {}
+local updateMetaPath = nil
+local updatePkgPath = nil
+local updatePendingVersion = nil
+local updateManual = false
+
+local function updateCacheRead()
+  local t = {}
+  local ok, res = pcall(table.load, UPDATE_CACHE_PATH, t)
+  if ok and res then return t end
+  return {}
+end
+
+local function updateCacheWrite(latest)
+  pcall(table.save, UPDATE_CACHE_PATH, { lastCheck = os.time(), knownLatest = latest })
+end
+
+local function updateVersionParts(v)
+  local parts = {}
+  for seg in tostring(v):gmatch("[^%.]+") do
+    parts[#parts + 1] = tonumber(seg:match("^%d+")) or 0
+  end
+  return parts
+end
+
+-- Porownanie numeryczne segmentow (suffix literowy pomijany): 1.0.9m &lt; 1.0.16m.
+local function updateVersionNewer(a, b)
+  local pa, pb = updateVersionParts(a), updateVersionParts(b)
+  for i = 1, math.max(#pa, #pb) do
+    local x, y = pa[i] or 0, pb[i] or 0
+    if x ~= y then return x &gt; y end
+  end
+  return false
+end
+
+local function updateSay(msg)
+  safeCecho(C_HEADER .. "[treningi] " .. msg .. C_RESET .. "\n")
+end
+
+local function updateNotify(latest)
+  safeCecho("\n" .. C_HEADER .. "[treningi] Dostepna nowa wersja " .. latest ..
+    " (masz " .. PLUGIN_VERSION .. "). Wpisz " .. C_NOW .. UPDATE_CMD ..
+    C_RESET .. C_HEADER .. " aby zaktualizowac." .. C_RESET .. "\n\n")
+end
+
+local function updateFail(what)
+  updateSay("Nie udalo sie " .. what .. " - sprobuj pozniej.")
+end
+
+local function updateKillHandlers()
+  for k, id in pairs(updateDlHandlers) do
+    killAnonymousEventHandler(id)
+    updateDlHandlers[k] = nil
+  end
+end
+
+local function updateOnError(event)
+  updateKillHandlers()
+  updateMetaPath = nil
+  updatePkgPath = nil
+  updatePendingVersion = nil
+  updateFail("sprawdzic aktualizacji")
+end
+
+local function updateOnPkgDone(event, path)
+  if path ~= updatePkgPath then return end
+  updateKillHandlers()
+  local v = updatePendingVersion
+  updatePkgPath = nil
+  updatePendingVersion = nil
+  pcall(uninstallPackage, UPDATE_PKG_NAME)
+  for _, legacyName in ipairs(UPDATE_LEGACY_PKGS) do
+    pcall(uninstallPackage, legacyName)
+  end
+  tempTimer(1, function()
+    installPackage(path)
+    os.remove(path)
+    updateSay("Zaktualizowano do wersji " .. v .. ". Zrestartuj Mudleta, aby zmiany zadzialaly.")
+  end)
+end
+
+local function updateOnMetaDone(event, path)
+  if path ~= updateMetaPath then return end
+  updateMetaPath = nil
+  if updateDlHandlers.meta then
+    killAnonymousEventHandler(updateDlHandlers.meta)
+    updateDlHandlers.meta = nil
+  end
+  local ok, meta = pcall(function()
+    local f = io.open(path, "r")
+    if not f then error("brak pliku metadanych") end
+    local body = f:read("*a")
+    f:close()
+    return yajl.to_value(body)
+  end)
+  if not ok or type(meta) ~= "table" or type(meta.tag_name) ~= "string" then
+    updateKillHandlers()
+    updateFail("sprawdzic aktualizacji")
+    return
+  end
+  local latest = meta.tag_name:gsub("^v", "")
+  updateCacheWrite(latest)
+  if not updateVersionNewer(latest, PLUGIN_VERSION) then
+    updateKillHandlers()
+    if updateManual then updateSay("Masz najnowsza wersje (" .. PLUGIN_VERSION .. ").") end
+    return
+  end
+  if not updateManual then
+    updateKillHandlers()
+    updateNotify(latest)
+    return
+  end
+  local url = nil
+  if type(meta.assets) == "table" then
+    for _, a in ipairs(meta.assets) do
+      if type(a) == "table" and type(a.browser_download_url) == "string"
+         and a.browser_download_url:match("%.mpackage$") then
+        url = a.browser_download_url
+        break
+      end
+    end
+  end
+  if not url then
+    url = "https://github.com/Isithunzi000/" .. UPDATE_REPO .. "/releases/download/v" ..
+          latest .. "/" .. UPDATE_PKG_NAME .. ".mpackage"
+  end
+  updatePendingVersion = latest
+  updatePkgPath = getMudletHomeDir() .. "/" .. UPDATE_PKG_NAME .. ".mpackage"
+  updateDlHandlers.pkg = registerAnonymousEventHandler("sysDownloadDone", updateOnPkgDone)
+  downloadFile(updatePkgPath, url)
+end
+
+local function startUpdateCheck(manual)
+  updateManual = manual and true or false
+  if mudletOlderThan and mudletOlderThan(4, 6) then
+    if updateManual then updateSay("Aktualizator wymaga Mudleta 4.6 lub nowszego.") end
+    return
+  end
+  if not updateManual then
+    local cache = updateCacheRead()
+    local lastCheck = tonumber(cache.lastCheck) or 0
+    if os.time() - lastCheck &lt; UPDATE_THROTTLE_SEC then
+      if type(cache.knownLatest) == "string"
+         and updateVersionNewer(cache.knownLatest, PLUGIN_VERSION) then
+        updateNotify(cache.knownLatest)
+      end
+      return
+    end
+  end
+  updateMetaPath = getMudletHomeDir() .. "/" .. UPDATE_PKG_NAME .. "_update_meta.json"
+  updateDlHandlers.meta = registerAnonymousEventHandler("sysDownloadDone", updateOnMetaDone)
+  updateDlHandlers.err  = registerAnonymousEventHandler("sysDownloadError", updateOnError)
+  downloadFile(updateMetaPath, UPDATE_API_URL)
+end
+
+function treningi.updaterCheck(manual)
+  startUpdateCheck(manual)
+end
+
+-- ==========================================================================
+-- POMOC (konsola), ALIASY, INIT
+-- ==========================================================================
+
+function treningi.banner()
+  return "Treningi " .. PLUGIN_VERSION .. " (build " .. PLUGIN_BUILD ..
+         ") - kalkulator cen treningow."
+end
+
+function treningi.onPomoc()
+  cecho("\n&lt;green&gt;" .. treningi.banner() .. "&lt;reset&gt;\n")
+  cecho("&lt;yellow&gt;Aliasy:&lt;reset&gt;\n")
+  cecho("  &lt;yellow&gt;/treningi&lt;reset&gt; - otwiera/zamyka okno kalkulatora\n")
+  cecho("  &lt;yellow&gt;/treningi pomoc&lt;reset&gt; (albo &lt;yellow&gt;/treningi help&lt;reset&gt;) - ten tekst\n")
+  cecho("  &lt;yellow&gt;/treningi tabela&lt;reset&gt; - okno poziomow maksymalnych wg zawodu\n")
+  cecho("  &lt;yellow&gt;/treningi aktualizuj&lt;reset&gt; - sprawdza i pobiera nowa wersje\n")
+  cecho("&lt;yellow&gt;Jak liczyc:&lt;reset&gt;\n")
+  cecho("  1. Wybierz umiejetnosc z listy (filtr nad lista zawija liste).\n")
+  cecho("  2. Wpisz koszt treningu z gry (zloto/srebro/miedz) - kalkulator\n")
+  cecho("     pokaze obecny poziom. Przelacznik pod polami wybiera, czy podany\n")
+  cecho("     koszt dotyczy ostatniego czy nastepnego treningu.\n")
+  cecho("  3. Pola 'z poziomu / na poziom' licza laczny koszt przedzialu\n")
+  cecho("     (wlacznie). Kolejnosc wpisow nie ma znaczenia.\n")
+  cecho("  &lt;yellow&gt;cios specjalny&lt;reset&gt; - umiejetnosc specjalna z zawodu: cena\n")
+  cecho("     zawsze 100% tabeli; maks. 75% bez polecenia stowarzyszenia, 100% z\n")
+  cecho("     poleceniem (przelacznik pod polami przedzialu).\n")
+  cecho("  &lt;yellow&gt;inna umiejetnosc...&lt;reset&gt; - wlasny procent ceny (1-100)\n")
+  cecho("     i opcjonalny poziom maksymalny (puste pole = bez limitu).\n")
+  cecho("Wszystkie pola zapisuja sie na dysku profilu i wracaja po restarcie.\n")
+  cecho("Plugin w pelni zgodny z regulaminem gry - czysty kalkulator,\n")
+  cecho("zero automatyki, zero wysylania komend.\n\n")
+end
+
+function treningi.onAlias()
+  gui.toggle()
+end
+
+function treningi.onTabela()
+  gui.toggleTabela()
+end
+
+function treningi.onAktualizuj()
+  startUpdateCheck(true)
+end
+
+-- init: stan z dysku profilu, okno, auto-check aktualizacji (throttled 8 h)
+wczytajStan()
+gui.build()
+if type(tempTimer) == "function" then
+  tempTimer(10, function() startUpdateCheck(false) end)
+end
+if cecho then
+  cecho("&lt;green&gt;[treningi]&lt;reset&gt; Kalkulator cen treningow v" .. PLUGIN_VERSION ..
+        " zaladowany. Wpisz &lt;yellow&gt;/treningi&lt;reset&gt; (pomoc: &lt;yellow&gt;/treningi pomoc&lt;reset&gt;).\n")
+end
+
+-- Hooki dla lokalnych testow silnika (port harnessa Dargoth).
+treningi._test = {
+  cenaTreningu      = cenaTreningu,
+  obecnyPoziom      = obecnyPoziom,
+  kosztPrzedzialu   = kosztPrzedzialu,
+  naMiedz           = naMiedz,
+  zMiedzi           = zMiedzi,
+  sanitizujLiczbe   = sanitizujLiczbe,
+  limitZWpisu       = limitZWpisu,
+  porzadkujPrzedzial= porzadkujPrzedzial,
+  formatujLiczbe    = formatujLiczbe,
+  limitDla          = limitDla,
+  limitWyswietlany  = limitWyswietlany,
+  UMIEJETNOSCI      = UMIEJETNOSCI,
+  ZAWODY            = ZAWODY,
+  TABELA_POZIOMOW   = TABELA_POZIOMOW,
+  KOSZT_BAZOWY      = KOSZT_BAZOWY,
+}
+
+end
+</script>
+		</Script>
+	</ScriptPackage>
+	<KeyPackage />
+	<HelpPackage>
+		<helpURL />
+	</HelpPackage>
+</MudletPackage>
