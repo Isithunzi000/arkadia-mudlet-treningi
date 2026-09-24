@@ -2,8 +2,6 @@
 
 Pakiet do Mudleta: kalkulator cen treningów umiejętności dla Arkadii MUD. Komenda `/treningi` otwiera okno kalkulatora — obecny poziom umiejętności z kosztu treningu i łączny koszt przedziału treningów.
 
-Port pluginu [treningi z klienta Dargoth](https://github.com/Isithunzi000/arkadia-dargoth-plugins).
-
 ---
 
 ## Jak zainstalować
