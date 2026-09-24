@@ -14,7 +14,7 @@ treningi = treningi or {}
 
 do
 
-local PLUGIN_VERSION = "1.0.4m"
+local PLUGIN_VERSION = "1.0.5m"
 local PLUGIN_BUILD   = "24-09-2026"
 
 treningi.version = PLUGIN_VERSION
@@ -843,7 +843,7 @@ local function renderTabela()
     end
   end
   gui.tabcon:echo("\n")
-  gui.tabcon:cecho("<dark_grey>" .. string.rep("-", TAB_NAME_W + #ZAWODY_SKROTY * TAB_CELL_W) .. "\n")
+  gui.tabcon:cecho("<dim_grey>" .. string.rep("-", TAB_NAME_W + #ZAWODY_SKROTY * TAB_CELL_W) .. "\n")
   for _, w in ipairs(TABELA_POZIOMOW) do
     gui.tabcon:cecho("<white>" .. padRight(w.um, TAB_NAME_W))
     for i = 1, #ZAWODY do
@@ -861,13 +861,13 @@ local function renderTabela()
     end
     gui.tabcon:echo("\n")
   end
-  gui.tabcon:cecho("\n<dark_grey>Legenda: " .. table.concat(ZAWODY_SKROTY, " ") .. "\n")
+  gui.tabcon:cecho("\n<dim_grey>Legenda: " .. table.concat(ZAWODY_SKROTY, " ") .. "\n")
   for i = 1, #ZAWODY do
-    gui.tabcon:cecho("<dark_grey>" .. ZAWODY_SKROTY[i] .. " = " .. ZAWODY[i] .. "\n")
+    gui.tabcon:cecho("<dim_grey>" .. ZAWODY_SKROTY[i] .. " = " .. ZAWODY[i] .. "\n")
   end
-  gui.tabcon:cecho("<dark_grey>~ = wartosc przyblizona (GP + 75% roznicy, zaokraglone); "
+  gui.tabcon:cecho("<dim_grey>~ = wartosc przyblizona (GP + 75% roznicy, zaokraglone); "
                    .. "- = zawod nie oferuje umiejetnosci (liczone jak GP).\n")
-  gui.tabcon:cecho("<dark_grey>Tryb: " .. (pol and "z poleceniem stowarzyszenia"
+  gui.tabcon:cecho("<dim_grey>Tryb: " .. (pol and "z poleceniem stowarzyszenia"
                    or "bez polecenia") .. "\n")
 end
 
