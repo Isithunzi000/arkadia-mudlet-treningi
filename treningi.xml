@@ -60,7 +60,7 @@ treningi = treningi or {}
 
 do
 
-local PLUGIN_VERSION = "1.0.3m"
+local PLUGIN_VERSION = "1.0.4m"
 local PLUGIN_BUILD   = "24-09-2026"
 
 treningi.version = PLUGIN_VERSION
@@ -356,11 +356,15 @@ local stan = { filtr = "" }
 for k, v in pairs(STAN_DOMYSLNY) do stan[k] = v end
 
 local function wczytajStan()
-  -- table.save(path, t) serializuje t jako element listy varargs; table.load
-  -- bez tabeli docelowej zwraca pierwszy element (jak w ishtar_cal).
-  local ok, t = pcall(table.load, STAN_PATH)
-  if not (ok and type(t) == "table") then return end
+  -- Semantyka Mudleta (zweryfikowana E2E na Mudlet 5.0.1): table.load bez
+  -- tabeli docelowej zwraca nil; z tabela docelowa wypelnia ja plasko
+  -- kluczami pierwszego zapisanego elementu. Fallback t[1] na wypadek
+  -- starszych zapisow w innych wersjach klienta.
+  local t = {}
+  local ok = pcall(table.load, STAN_PATH, t)
+  if not ok then return end
   if type(t[1]) == "table" and t.umiejetnosc == nil then t = t[1] end
+  if t.umiejetnosc == nil and t.zloto == nil then return end
   if type(t.umiejetnosc) == "number"
      and t.umiejetnosc &gt;= 0 and t.umiejetnosc &lt;= INNA_IDX then
     stan.umiejetnosc = t.umiejetnosc
@@ -992,8 +996,11 @@ local updatePendingVersion = nil
 local updateManual = false
 
 local function updateCacheRead()
-  local ok, t = pcall(table.load, UPDATE_CACHE_PATH)
-  if ok and type(t) == "table" then
+  -- table.load bez tabeli docelowej zwraca nil (Mudlet 5.0.1) - patrz
+  -- komentarz w wczytajStan.
+  local t = {}
+  local ok = pcall(table.load, UPDATE_CACHE_PATH, t)
+  if ok then
     if type(t[1]) == "table" and t.lastCheck == nil then t = t[1] end
     return t
   end
