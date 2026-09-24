@@ -14,7 +14,7 @@ treningi = treningi or {}
 
 do
 
-local PLUGIN_VERSION = "1.0.5m"
+local PLUGIN_VERSION = "1.0.6m"
 local PLUGIN_BUILD   = "24-09-2026"
 
 treningi.version = PLUGIN_VERSION
@@ -199,9 +199,11 @@ local ZAWODY = {
   "Lancknecht", "Nozownik", "Barbarzynca", "Mysliwy", "Kupiec", "Odkrywca",
   "Gildia Podroznikow",
 }
+-- Skroty 1:1 z klientem www/Dargoth; ogonki jako escape'y UTF-8 (repo ASCII):
+-- \197\188 = z kropka, \197\155 = s z akcentem.
 local ZAWODY_SKROTY = {
-  "Par", "Fan", "Leg", "Gla", "Kor", "Str", "Lan", "Noz", "Bar", "Mys",
-  "Kup", "Odk", "GP",
+  "Part", "Fan", "Leg", "Glad", "Kors", "Stra\197\188", "Lanc", "No\197\188",
+  "Barb", "My\197\155l", "Kup", "Odkr", "GP",
 }
 
 local TABELA_POZIOMOW = {
@@ -376,25 +378,26 @@ local gui = { managed = {}, fields = {}, rows = {}, open = false,
               tabOpen = false, tabPolecenie = true }
 treningi.gui = gui
 
--- Paleta spojna z truwer/pasek: ciemne pola, jasny tekst, wyrazne role.
+-- Paleta: ciemny granat z niebieskim akcentem, wysoki kontrast rol
+-- (naglowki sekcji, pola, wynik, nominaly) - nic sie nie zlewa.
 local STYLE = {
-  btn     = "background-color:#3a4150;color:#e8ebf0;border:1px solid #5a6478;border-radius:3px;",
-  primary = "background-color:#2e5d8c;color:#ffffff;border:1px solid #4a80b4;border-radius:3px;",
-  field   = "background-color:#20242c;color:#e8ebf0;border:1px solid #5a6478;",
+  btn     = "background-color:#2b3444;color:#dfe6f2;border:1px solid #46536b;border-radius:4px;",
+  primary = "background-color:#1f6feb;color:#ffffff;border:1px solid #58a6ff;border-radius:4px;font-weight:bold;",
+  field   = "background-color:#12161d;color:#eef2f8;border:1px solid #3a4557;",
   title   = "color:#f0f3f8;background-color:transparent;",
-  meta    = "color:#9aa4b5;background-color:transparent;",
-  lbl     = "color:#aeb8c8;background-color:transparent;",
+  meta    = "color:#58a6ff;font-weight:bold;background-color:transparent;",
+  lbl     = "color:#9ba7ba;background-color:transparent;",
   nota    = "color:#e0b85c;font-style:italic;background-color:transparent;",
-  row     = "background-color:#20242c;color:#dde3ee;border-bottom:1px solid #2a2f3a;",
-  rowSpec = "background-color:#20242c;color:#e0b85c;border-bottom:1px solid #2a2f3a;",
-  rowSel  = "background-color:#2e5d8c;color:#ffffff;border-bottom:1px solid #2a2f3a;",
-  panel   = "background-color:#1d2230;color:#7fb4ff;font-size:18pt;font-weight:bold;border:1px solid #3d4356;border-radius:4px;",
-  panelLbl= "color:#9aa4b5;background-color:transparent;",
-  mth     = "background-color:#2c3d66;color:#9fc0ff;border-radius:3px;",
-  zl      = "background-color:#4d4020;color:#ffd766;border-radius:3px;",
-  sr      = "background-color:#3c3c46;color:#d5d5e0;border-radius:3px;",
-  mz      = "background-color:#4a3128;color:#e8a87c;border-radius:3px;",
-  footlink= "color:#9aa4b5;background-color:transparent;border:none;text-align:left;",
+  row     = "background-color:#161b23;color:#d5dce8;border-bottom:1px solid #232a35;",
+  rowSpec = "background-color:#161b23;color:#e0b85c;border-bottom:1px solid #232a35;",
+  rowSel  = "background-color:#1f6feb;color:#ffffff;border-bottom:1px solid #232a35;font-weight:bold;",
+  panel   = "background-color:#0f1420;color:#79c0ff;font-size:20pt;font-weight:bold;border:2px solid #1f6feb;border-radius:6px;",
+  panelLbl= "color:#9ba7ba;background-color:transparent;",
+  mth     = "background-color:#1c2f52;color:#9fc0ff;border:1px solid #2f4a7a;border-radius:3px;font-weight:bold;",
+  zl      = "background-color:#3d3416;color:#ffd766;border:1px solid #6b5a24;border-radius:3px;font-weight:bold;",
+  sr      = "background-color:#2e3138;color:#d5d9e0;border:1px solid #4a4f58;border-radius:3px;font-weight:bold;",
+  mz      = "background-color:#3a2418;color:#e8a87c;border:1px solid #5f3a26;border-radius:3px;font-weight:bold;",
+  footlink= "color:#9ba7ba;background-color:transparent;border:none;text-align:left;",
 }
 
 -- Granice wnetrza okna (jak w truwerze, zmierzone na zywym kliencie):
@@ -482,19 +485,54 @@ local function pole(name, x, y, wd, text, commit, container)
   end, container)
 end
 
+-- Odczyt biezacego tekstu pola: getCmdLine (Mudlet 3.1+), fallback na
+-- getText widgetu (starsze wersje/stuby).
+local function odczytPola(name)
+  if type(getCmdLine) == "function" then
+    local ok, t = pcall(getCmdLine, name)
+    if ok and type(t) == "string" then return t end
+  end
+  local w = gui.managed[name]
+  if w and type(w.getText) == "function" then
+    local ok, t = pcall(w.getText, w)
+    if ok and type(t) == "string" then return t end
+  end
+  return nil
+end
+
 function gui.flushFields(exceptName)
   for name, f in pairs(gui.fields) do
     if name ~= exceptName then
-      local w = gui.managed[name]
-      if w and type(w.getText) == "function" then
-        local ok, t = pcall(w.getText, w)
-        if ok and type(t) == "string" and t ~= f.value then
-          f.commit(t)
-          f.value = t
-        end
+      local t = odczytPola(name)
+      if t and t ~= f.value then
+        f.commit(t)
+        f.value = t
       end
     end
   end
+end
+
+local renderLista -- fwd: gui.poll (wyzej) odswieza liste po zmianie filtra
+
+-- Live odczyt pol bez Entera (jak event "input" w kliencie www): cykliczny
+-- poll getCmdLine; zmiana filtra odswieza liste, zmiana innych pol wynik.
+-- Poll NIGDY nie wywoluje gui.render (print do pola kasowalby wpisywanie).
+function gui.poll()
+  if not gui.open then return end
+  local zmianaFiltra, zmianaInnych, jakas = false, false, false
+  for name, f in pairs(gui.fields) do
+    local t = odczytPola(name)
+    if t and t ~= f.value then
+      f.commit(t)
+      f.value = t
+      jakas = true
+      if name == "trng.filtr" then zmianaFiltra = true else zmianaInnych = true end
+    end
+  end
+  if not jakas then return end
+  zapiszStan()
+  if zmianaFiltra then renderLista() end
+  if zmianaInnych then gui.odswiez() end
 end
 
 -- ---------------------------------------------------------------------------
@@ -520,7 +558,7 @@ local function wpisyListy()
   return out
 end
 
-local function renderLista()
+renderLista = function()
   if not gui.lista then return end
   local wpisy = wpisyListy()
   for i, w in ipairs(wpisy) do
@@ -696,7 +734,7 @@ function gui.render()
   if not gui.lista then
     gui.lista = Geyser.ScrollBox:new({ name = "trng.lista", x = 10, y = 32,
                                        width = 600, height = 150 }, gui.win)
-    applyStyle(gui.lista, "background-color:#1a1e26;")
+    applyStyle(gui.lista, "background-color:#0f1319;")
   end
   renderLista()
 
@@ -800,12 +838,16 @@ function gui.toggle()
     gui.flushFields() -- zamkniecie splukuje pola: wpis bez Entera nie ginie
     zapiszStan()
     gui.open = false
+    if gui.pollTimer then killTimer(gui.pollTimer) gui.pollTimer = nil end
     gui.win:hide()
     return
   end
   gui.open = true
   gui.render()
   gui.win:show()
+  -- Live odczyt pol (filtr + ceny) bez Entera.
+  if gui.pollTimer then killTimer(gui.pollTimer) end
+  gui.pollTimer = tempTimer(0.4, function() gui.poll() end, true)
 end
 
 -- ---------------------------------------------------------------------------
@@ -813,7 +855,7 @@ end
 -- ---------------------------------------------------------------------------
 
 local TAB_NAME_W = 26
-local TAB_CELL_W = 5
+local TAB_CELL_W = 6
 
 local function padRight(s, w)
   s = tostring(s)
@@ -823,52 +865,37 @@ local function padRight(s, w)
   return s .. string.rep(" ", w - len)
 end
 
-local function cellTxt(v, przybl)
-  if v == nil then return padRight("-", TAB_CELL_W) end
-  local s = tostring(v) .. (przybl and "~" or "")
-  return padRight(s, TAB_CELL_W)
-end
-
+-- Tabela 1:1 z klientem www/Dargoth: intro, skroty referencyjne, zawod
+-- ktory nie oferuje umiejetnosci pokazuje wartosc GP przygaszona, tryb
+-- "bez polecenia" dopisuje notke o przyblizeniach. Bez wlasnych legend.
 local function renderTabela()
   if not gui.tabcon then return end
   gui.tabcon:clear()
   local pol = gui.tabPolecenie
+  gui.tabcon:cecho("<dim_grey>Poziom maksymalny umiejetnosci w danym zawodzie. 1 trening = 1%.\n\n")
   gui.tabcon:cecho("<yellow>" .. padRight("umiejetnosc", TAB_NAME_W))
   for i = 1, #ZAWODY_SKROTY do
     local skrot = padRight(ZAWODY_SKROTY[i], TAB_CELL_W)
-    if i == #ZAWODY_SKROTY then
-      gui.tabcon:cecho("<cyan>" .. skrot)
-    else
-      gui.tabcon:cecho("<white>" .. skrot)
-    end
+    gui.tabcon:cecho((i == #ZAWODY_SKROTY and "<cyan>" or "<white>") .. skrot)
   end
   gui.tabcon:echo("\n")
-  gui.tabcon:cecho("<dim_grey>" .. string.rep("-", TAB_NAME_W + #ZAWODY_SKROTY * TAB_CELL_W) .. "\n")
   for _, w in ipairs(TABELA_POZIOMOW) do
     gui.tabcon:cecho("<white>" .. padRight(w.um, TAB_NAME_W))
     for i = 1, #ZAWODY do
       local lw = limitWyswietlany(w.um, ZAWODY[i], pol)
-      local cell
       local color = "<light_slate_grey>"
       if i == #ZAWODY then color = "<cyan>" end
-      if lw and lw.przyblizona then color = "<steel_blue>" end
-      if not lw then
-        cell = cellTxt(nil)
-      else
-        cell = cellTxt(lw.wartosc, lw.przyblizona and not pol)
-      end
-      gui.tabcon:cecho(color .. cell)
+      if w.limity[i] < 0 then color = "<dim_grey>" end -- nie oferuje: GP przygaszone
+      gui.tabcon:cecho(color .. padRight(lw and lw.wartosc or "-", TAB_CELL_W))
     end
     gui.tabcon:echo("\n")
   end
-  gui.tabcon:cecho("\n<dim_grey>Legenda: " .. table.concat(ZAWODY_SKROTY, " ") .. "\n")
-  for i = 1, #ZAWODY do
-    gui.tabcon:cecho("<dim_grey>" .. ZAWODY_SKROTY[i] .. " = " .. ZAWODY[i] .. "\n")
+  gui.tabcon:cecho("\n<dim_grey>Przygaszone = limit jak w GP + ciosy specjalne: "
+                   .. "75% bez polecenia, 100% z poleceniem.\n")
+  if not pol then
+    gui.tabcon:cecho("<dim_grey>Wartosci w tym trybie sa przyblizone "
+                     .. "(GP + 75% roznicy miedzy zawodem a GP).\n")
   end
-  gui.tabcon:cecho("<dim_grey>~ = wartosc przyblizona (GP + 75% roznicy, zaokraglone); "
-                   .. "- = zawod nie oferuje umiejetnosci (liczone jak GP).\n")
-  gui.tabcon:cecho("<dim_grey>Tryb: " .. (pol and "z poleceniem stowarzyszenia"
-                   or "bez polecenia") .. "\n")
 end
 
 local function tabBtnRefresh()
@@ -882,24 +909,28 @@ function gui.buildTabela()
   if gui.tabwin then return end
   gui.tabwin = Adjustable.Container:new({
     name = "treningi_tabela",
-    x = 90, y = 30, width = 700, height = 600,
+    x = 90, y = 30, width = 870, height = 680,
     titleText = "Treningi - poziomy maksymalne wg zawodu",
     titleTxtColor = "#f0f3f8",
     titleFormat = "lb14",
   })
-  btn("trng.tab.bez", 10, 4, 200, "bez polecenia", function()
-    gui.tabPolecenie = false
-    tabBtnRefresh(); renderTabela()
-  end, gui.tabwin)
-  btn("trng.tab.z", 218, 4, 200, "z poleceniem", function()
+  btn("trng.tab.z", 10, 4, 200, "z poleceniem", function()
     gui.tabPolecenie = true
     tabBtnRefresh(); renderTabela()
   end, gui.tabwin)
+  btn("trng.tab.bez", 218, 4, 200, "bez polecenia", function()
+    gui.tabPolecenie = false
+    tabBtnRefresh(); renderTabela()
+  end, gui.tabwin)
   gui.tabcon = Geyser.MiniConsole:new({
-    name = "trng.tabcon", x = 10, y = 34, width = 670, height = 540,
+    -- 32 linie tabeli (tryb bez polecenia) * ~19 px/linia (Mudlet 5.0.1,
+    -- fontSize 9) = 608 px; wiersz = 102 znaki * ~7.8 px = ~796 px.
+    -- Konsola i okno musza miescic calosc bez scrolla i bez ucinania GP.
+    name = "trng.tabcon", x = 10, y = 38, width = 840, height = 630,
+    wrapAt = TAB_NAME_W + #ZAWODY * TAB_CELL_W + 2,
   }, gui.tabwin)
   pcall(function() gui.tabcon:setFont("Monospace") end)
-  pcall(function() gui.tabcon:setFontSize(10) end)
+  pcall(function() gui.tabcon:setFontSize(9) end)
   tabBtnRefresh()
   renderTabela()
   gui.tabwin:hide()
