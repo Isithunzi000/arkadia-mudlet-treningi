@@ -1,50 +1,4 @@
-<MudletPackage version="1.001">
-	<TriggerPackage />
-	<TimerPackage />
-	<AliasPackage>
-		<Alias isActive="yes" isFolder="no">
-			<name>treningi_alias</name>
-			<script>if treningi and treningi.onAlias then
-  treningi.onAlias()
-end</script>
-			<command />
-			<packageName />
-			<regex>^/treningi$</regex>
-		</Alias>
-		<Alias isActive="yes" isFolder="no">
-			<name>treningi_pomoc_alias</name>
-			<script>if treningi and treningi.onPomoc then
-  treningi.onPomoc()
-end</script>
-			<command />
-			<packageName />
-			<regex>^/treningi\s+(?:pomoc|help)$</regex>
-		</Alias>
-		<Alias isActive="yes" isFolder="no">
-			<name>treningi_tabela_alias</name>
-			<script>if treningi and treningi.onTabela then
-  treningi.onTabela()
-end</script>
-			<command />
-			<packageName />
-			<regex>^/treningi\s+tabela$</regex>
-		</Alias>
-		<Alias isActive="yes" isFolder="no">
-			<name>treningi_aktualizuj_alias</name>
-			<script>if treningi and treningi.onAktualizuj then
-  treningi.onAktualizuj()
-end</script>
-			<command />
-			<packageName />
-			<regex>^/treningi\s+aktualizuj$</regex>
-		</Alias>
-	</AliasPackage>
-	<ActionPackage />
-	<ScriptPackage>
-		<Script isActive="yes" isFolder="no">
-			<name>treningi</name>
-			<eventHandlerList />
-			<script>-- treningi - kalkulator cen treningow Arkadii dla Mudleta (port pluginu Dargoth).
+-- treningi - kalkulator cen treningow Arkadii dla Mudleta (port pluginu Dargoth).
 -- Alias /treningi otwiera/zamyka okno kalkulatora. /treningi pomoc - pomoc
 -- w konsoli. /treningi tabela - okno tabeli poziomow maksymalnych wg zawodu.
 -- /treningi aktualizuj - aktualizacja z GitHub Releases.
@@ -161,12 +115,12 @@ local function cenaTreningu(poziom, procentCeny)
 end
 
 -- Obecny poziom umiejetnosci na podstawie kosztu treningu.
--- Pierwszy poziom i z cenaTreningu(i,k) &gt;= koszt; poziom = i+1 dla
--- 'ostatni', i dla 'nastepny', obciety do 100. Koszt ponad maks -&gt; 100.
+-- Pierwszy poziom i z cenaTreningu(i,k) >= koszt; poziom = i+1 dla
+-- 'ostatni', i dla 'nastepny', obciety do 100. Koszt ponad maks -> 100.
 local function obecnyPoziom(zl, sr, mdz, procentCeny, tryb)
   local miedzi = naMiedz(zl, sr, mdz)
   for i = 0, MAKS_POZIOM do
-    if cenaTreningu(i, procentCeny) &gt;= miedzi then
+    if cenaTreningu(i, procentCeny) >= miedzi then
       return math.min(tryb == "ostatni" and i + 1 or i, MAKS_POZIOM)
     end
   end
@@ -175,10 +129,10 @@ end
 
 -- Laczny koszt treningow w przedziale [od, doo] WLACZNIE; kazdy trening
 -- liczony osobno. maks (opcjonalny): koniec powyzej maksimum obcinany
--- (wynik.obcietyDo); przedzial w calosci powyzej -&gt; nil. nil tez gdy doo &lt; od.
+-- (wynik.obcietyDo); przedzial w calosci powyzej -> nil. nil tez gdy doo < od.
 local function kosztPrzedzialu(od, doo, procentCeny, maks)
-  if doo - od &lt; 0 then return nil end
-  if maks ~= nil and od &gt; maks then return nil end
+  if doo - od < 0 then return nil end
+  if maks ~= nil and od > maks then return nil end
   local doRzeczywiste = maks ~= nil and math.min(doo, maks) or doo
   local suma = 0
   for i = od, doRzeczywiste do
@@ -189,9 +143,9 @@ local function kosztPrzedzialu(od, doo, procentCeny, maks)
   return wynik
 end
 
--- Dowolny wpis uzytkownika -&gt; liczba calkowita z [0, maks].
--- Biale znaki obcinane; pusty -&gt; 0; przecinek/kropka obcina reszte;
--- ze smieci zostaja same cyfry ("1 234 mdz" -&gt; 1234); clamp do [0, maks].
+-- Dowolny wpis uzytkownika -> liczba calkowita z [0, maks].
+-- Biale znaki obcinane; pusty -> 0; przecinek/kropka obcina reszte;
+-- ze smieci zostaja same cyfry ("1 234 mdz" -> 1234); clamp do [0, maks].
 local function sanitizujLiczbe(wpis, maks)
   local czysty = tostring(wpis or ""):gsub("^%s+", ""):gsub("%s+$", "")
   if czysty == "" then return 0 end
@@ -202,13 +156,13 @@ local function sanitizujLiczbe(wpis, maks)
   local n = tonumber(cyfry)
   if not n then return 0 end
   n = math.floor(n)
-  if n &lt; 0 then return 0 end
-  if n &gt; maks then return maks end
+  if n < 0 then return 0 end
+  if n > maks then return maks end
   return n
 end
 
--- Wpis "poziom maksymalny" -&gt; limit albo nil (bez limitu). Pusty, smieci
--- lub &gt;= 100 = brak limitu. Wartosci 1-99 zwracane jako limit.
+-- Wpis "poziom maksymalny" -> limit albo nil (bez limitu). Pusty, smieci
+-- lub >= 100 = brak limitu. Wartosci 1-99 zwracane jako limit.
 local function limitZWpisu(wpis)
   local czysty = tostring(wpis or ""):gsub("^%s+", ""):gsub("%s+$", "")
   if czysty == "" then return nil end
@@ -218,17 +172,17 @@ local function limitZWpisu(wpis)
   if cyfry == "" then return nil end
   local n = tonumber(cyfry)
   if not n then return nil end
-  if n &gt;= MAKS_POZIOM then return nil end
+  if n >= MAKS_POZIOM then return nil end
   return math.max(1, math.floor(n))
 end
 
 -- Przedzial [od, do] porzadkowany rosnaco.
 local function porzadkujPrzedzial(od, doo)
-  if od &lt;= doo then return od, doo end
+  if od <= doo then return od, doo end
   return doo, od
 end
 
--- Grupowanie tysiecy (1234567 -&gt; "1 234 567").
+-- Grupowanie tysiecy (1234567 -> "1 234 567").
 local function formatujLiczbe(n)
   local s = tostring(n)
   local r = s:reverse():gsub("(%d%d%d)", "%1 "):reverse()
@@ -298,19 +252,19 @@ local function indexZawodu(zawod)
 end
 
 -- Poziom maksymalny umiejetnosci dla sytuacji postaci.
--- zawod = nil -&gt; czyste GP. Zawod oferuje: z poleceniem = wartosc zawodu,
--- bez = GP + 75% roznicy (zaokraglone). Nie oferuje (kreska) -&gt; jak GP.
--- Nieznana umiejetnosc -&gt; nil.
+-- zawod = nil -> czyste GP. Zawod oferuje: z poleceniem = wartosc zawodu,
+-- bez = GP + 75% roznicy (zaokraglone). Nie oferuje (kreska) -> jak GP.
+-- Nieznana umiejetnosc -> nil.
 local function limitDla(um, zawod, polecenie)
   local w = znajdzWiersz(um)
   if not w then return nil end
   local gp = w.limity[#ZAWODY]
-  if gp &lt; 0 then return nil end
+  if gp < 0 then return nil end
   if zawod == nil then return gp end
   local idx = indexZawodu(zawod)
   if not idx then return nil end
   local z = w.limity[idx]
-  if z &lt; 0 then return gp end
+  if z < 0 then return gp end
   if polecenie then return z end
   return math.floor(gp + 0.75 * (z - gp) + 0.5)
 end
@@ -323,14 +277,14 @@ local function limitWyswietlany(um, zawod, polecenie)
   local idx = indexZawodu(zawod)
   if not idx then return nil end
   local gp = w.limity[#ZAWODY]
-  if gp &lt; 0 then return nil end
+  if gp < 0 then return nil end
   local z = w.limity[idx]
   local czyGP = idx == #ZAWODY
   if polecenie then
-    local v = z &gt;= 0 and z or gp
+    local v = z >= 0 and z or gp
     return { wartosc = v, przyblizona = false }
   end
-  if czyGP or z &lt; 0 then
+  if czyGP or z < 0 then
     return { wartosc = gp, przyblizona = false }
   end
   return { wartosc = math.floor(gp + 0.75 * (z - gp) + 0.5), przyblizona = true }
@@ -360,7 +314,7 @@ local function wczytajStan()
   local ok, res = pcall(table.load, STAN_PATH, t)
   if not (ok and res and type(t) == "table") then return end
   if type(t.umiejetnosc) == "number"
-     and t.umiejetnosc &gt;= 0 and t.umiejetnosc &lt;= INNA_IDX then
+     and t.umiejetnosc >= 0 and t.umiejetnosc <= INNA_IDX then
     stan.umiejetnosc = t.umiejetnosc
   end
   if t.tryb == "nastepny" or t.tryb == "ostatni" then stan.tryb = t.tryb end
@@ -368,7 +322,7 @@ local function wczytajStan()
     if type(t[k]) == "string" then stan[k] = t[k] end
   end
   if type(t.innaProcent) == "string"
-     and sanitizujLiczbe(t.innaProcent, 100) &gt;= 1 then
+     and sanitizujLiczbe(t.innaProcent, 100) >= 1 then
     stan.innaProcent = tostring(sanitizujLiczbe(t.innaProcent, 100))
   end
   if type(t.innaMaxPoziom) == "string" and limitZWpisu(t.innaMaxPoziom) ~= nil then
@@ -438,7 +392,7 @@ local STYLE = {
 }
 
 -- Granice wnetrza okna (jak w truwerze, zmierzone na zywym kliencie):
--- Inside ma 620 px szerokosci, dolna widoczna granica tresci to y+h =&lt; 540.
+-- Inside ma 620 px szerokosci, dolna widoczna granica tresci to y+h =< 540.
 local RIGHT_EDGE  = 620
 local FOOTER_Y    = 514
 
@@ -576,7 +530,7 @@ local function renderLista()
     l:echo(opis)
     if w.idx == stan.umiejetnosc then
       applyStyle(l, STYLE.rowSel)
-    elseif w.idx &gt;= CIOS_IDX then
+    elseif w.idx >= CIOS_IDX then
       applyStyle(l, STYLE.rowSpec)
     else
       applyStyle(l, STYLE.row)
@@ -621,7 +575,7 @@ function gui.odswiez()
   showLbl("trng.innaMax", czyInna)
   showLbl("trng.ciosPol", czyCios)
 
-  if stan.umiejetnosc &lt; 0 then
+  if stan.umiejetnosc < 0 then
     setLbl("trng.poziom", "-")
     setLbl("trng.podpowiedz", "Wybierz umiejetnosc z listy powyzej.")
     showLbl("trng.podpowiedz", true)
@@ -656,7 +610,7 @@ function gui.odswiez()
                          "trng.razem" }) do
       showLbl(n, false)
     end
-    if maks ~= nil and odP &gt; maks then
+    if maks ~= nil and odP > maks then
       setLbl("trng.notka", "Ten zakres jest poza zasiegiem - poziom maksymalny to " ..
              maks .. "%.")
       showLbl("trng.notka", true)
@@ -674,7 +628,7 @@ function gui.odswiez()
   }
   local puste = true
   for _, c in ipairs(chips) do
-    if c[2] &gt; 0 then
+    if c[2] > 0 then
       setLbl(c[1], " " .. formatujLiczbe(c[2]) .. " " .. c[3] .. " ")
       showLbl(c[1], true)
       puste = false
@@ -692,10 +646,10 @@ function gui.odswiez()
 
   if wynik.obcietyDo ~= nil then
     setLbl("trng.notka", "poziom maksymalny to " .. wynik.obcietyDo ..
-           "% - policzono " .. odP .. "% -&gt; " .. wynik.obcietyDo .. "%")
+           "% - policzono " .. odP .. "% -> " .. wynik.obcietyDo .. "%")
     showLbl("trng.notka", true)
   elseif od ~= odP or doo ~= doP then
-    setLbl("trng.notka", "policzono " .. odP .. "% -&gt; " .. doP .. "%")
+    setLbl("trng.notka", "policzono " .. odP .. "% -> " .. doP .. "%")
     showLbl("trng.notka", true)
   else
     showLbl("trng.notka", false)
@@ -739,8 +693,8 @@ function gui.render()
   end
   renderLista()
 
-  -- Sekcja: koszt treningu -&gt; poziom
-  txt("trng.sec1", 10, 188, 400, 16, "KOSZT TRENINGU -&gt; POZIOM", gui.win, STYLE.meta)
+  -- Sekcja: koszt treningu -> poziom
+  txt("trng.sec1", 10, 188, 400, 16, "KOSZT TRENINGU -> POZIOM", gui.win, STYLE.meta)
   txt("trng.zl.lbl", 10, 206, 193, 14, "zloto (zl)", gui.win, STYLE.lbl)
   txt("trng.sr.lbl", 213, 206, 193, 14, "srebro (sr)", gui.win, STYLE.lbl)
   txt("trng.mz.lbl", 416, 206, 194, 14, "miedz (mdz)", gui.win, STYLE.lbl)
@@ -858,7 +812,7 @@ local function padRight(s, w)
   s = tostring(s)
   local len = 0
   for _ in s:gmatch("[\1-\127\194-\244][\128-\191]*") do len = len + 1 end
-  if len &gt;= w then return s end
+  if len >= w then return s end
   return s .. string.rep(" ", w - len)
 end
 
@@ -872,25 +826,25 @@ local function renderTabela()
   if not gui.tabcon then return end
   gui.tabcon:clear()
   local pol = gui.tabPolecenie
-  gui.tabcon:cecho("&lt;yellow&gt;" .. padRight("umiejetnosc", TAB_NAME_W))
+  gui.tabcon:cecho("<yellow>" .. padRight("umiejetnosc", TAB_NAME_W))
   for i = 1, #ZAWODY_SKROTY do
     local skrot = padRight(ZAWODY_SKROTY[i], TAB_CELL_W)
     if i == #ZAWODY_SKROTY then
-      gui.tabcon:cecho("&lt;cyan&gt;" .. skrot)
+      gui.tabcon:cecho("<cyan>" .. skrot)
     else
-      gui.tabcon:cecho("&lt;white&gt;" .. skrot)
+      gui.tabcon:cecho("<white>" .. skrot)
     end
   end
   gui.tabcon:echo("\n")
-  gui.tabcon:cecho("&lt;dark_grey&gt;" .. string.rep("-", TAB_NAME_W + #ZAWODY_SKROTY * TAB_CELL_W) .. "\n")
+  gui.tabcon:cecho("<dark_grey>" .. string.rep("-", TAB_NAME_W + #ZAWODY_SKROTY * TAB_CELL_W) .. "\n")
   for _, w in ipairs(TABELA_POZIOMOW) do
-    gui.tabcon:cecho("&lt;white&gt;" .. padRight(w.um, TAB_NAME_W))
+    gui.tabcon:cecho("<white>" .. padRight(w.um, TAB_NAME_W))
     for i = 1, #ZAWODY do
       local lw = limitWyswietlany(w.um, ZAWODY[i], pol)
       local cell
-      local color = "&lt;light_slate_grey&gt;"
-      if i == #ZAWODY then color = "&lt;cyan&gt;" end
-      if lw and lw.przyblizona then color = "&lt;steel_blue&gt;" end
+      local color = "<light_slate_grey>"
+      if i == #ZAWODY then color = "<cyan>" end
+      if lw and lw.przyblizona then color = "<steel_blue>" end
       if not lw then
         cell = cellTxt(nil)
       else
@@ -900,13 +854,13 @@ local function renderTabela()
     end
     gui.tabcon:echo("\n")
   end
-  gui.tabcon:cecho("\n&lt;dark_grey&gt;Legenda: " .. table.concat(ZAWODY_SKROTY, " ") .. "\n")
+  gui.tabcon:cecho("\n<dark_grey>Legenda: " .. table.concat(ZAWODY_SKROTY, " ") .. "\n")
   for i = 1, #ZAWODY do
-    gui.tabcon:cecho("&lt;dark_grey&gt;" .. ZAWODY_SKROTY[i] .. " = " .. ZAWODY[i] .. "\n")
+    gui.tabcon:cecho("<dark_grey>" .. ZAWODY_SKROTY[i] .. " = " .. ZAWODY[i] .. "\n")
   end
-  gui.tabcon:cecho("&lt;dark_grey&gt;~ = wartosc przyblizona (GP + 75% roznicy, zaokraglone); "
+  gui.tabcon:cecho("<dark_grey>~ = wartosc przyblizona (GP + 75% roznicy, zaokraglone); "
                    .. "- = zawod nie oferuje umiejetnosci (liczone jak GP).\n")
-  gui.tabcon:cecho("&lt;dark_grey&gt;Tryb: " .. (pol and "z poleceniem stowarzyszenia"
+  gui.tabcon:cecho("<dark_grey>Tryb: " .. (pol and "z poleceniem stowarzyszenia"
                    or "bez polecenia") .. "\n")
 end
 
@@ -961,12 +915,12 @@ end
 -- instalacja komenda; stale nazwy assetow, sprzatanie historycznych nazw)
 -- ==========================================================================
 
-local C_HEADER = "&lt;yellow&gt;"
-local C_NOW    = "&lt;green&gt;"
-local C_RESET  = "&lt;reset&gt;"
+local C_HEADER = "<yellow>"
+local C_NOW    = "<green>"
+local C_RESET  = "<reset>"
 
 local function safeCecho(s)
-  if cecho then cecho(s) else io.write((s:gsub("&lt;%a+&gt;", ""))) end
+  if cecho then cecho(s) else io.write((s:gsub("<%a+>", ""))) end
 end
 
 local UPDATE_REPO         = "arkadia-mudlet-treningi"
@@ -976,7 +930,7 @@ local UPDATE_THROTTLE_SEC = 8 * 3600
 local UPDATE_API_URL      = "https://api.github.com/repos/Isithunzi000/" .. UPDATE_REPO .. "/releases/latest"
 local UPDATE_CACHE_PATH   = getMudletHomeDir() .. "/treningi_update_cache.lua"
 -- Historyczne nazwy paczek na mudlet-web (tozsamosc = nazwa pliku):
--- dawniej &lt;pkg&gt;_update; self = kamizelka na lokalne buildy.
+-- dawniej <pkg>_update; self = kamizelka na lokalne buildy.
 local UPDATE_LEGACY_PKGS = {
   "treningi_update",
   "treningi_" .. PLUGIN_VERSION:gsub("%.", "_"),
@@ -1007,12 +961,12 @@ local function updateVersionParts(v)
   return parts
 end
 
--- Porownanie numeryczne segmentow (suffix literowy pomijany): 1.0.9m &lt; 1.0.16m.
+-- Porownanie numeryczne segmentow (suffix literowy pomijany): 1.0.9m < 1.0.16m.
 local function updateVersionNewer(a, b)
   local pa, pb = updateVersionParts(a), updateVersionParts(b)
   for i = 1, math.max(#pa, #pb) do
     local x, y = pa[i] or 0, pb[i] or 0
-    if x ~= y then return x &gt; y end
+    if x ~= y then return x > y end
   end
   return false
 end
@@ -1123,7 +1077,7 @@ local function startUpdateCheck(manual)
   if not updateManual then
     local cache = updateCacheRead()
     local lastCheck = tonumber(cache.lastCheck) or 0
-    if os.time() - lastCheck &lt; UPDATE_THROTTLE_SEC then
+    if os.time() - lastCheck < UPDATE_THROTTLE_SEC then
       if type(cache.knownLatest) == "string"
          and updateVersionNewer(cache.knownLatest, PLUGIN_VERSION) then
         updateNotify(cache.knownLatest)
@@ -1151,23 +1105,23 @@ function treningi.banner()
 end
 
 function treningi.onPomoc()
-  cecho("\n&lt;green&gt;" .. treningi.banner() .. "&lt;reset&gt;\n")
-  cecho("&lt;yellow&gt;Aliasy:&lt;reset&gt;\n")
-  cecho("  &lt;yellow&gt;/treningi&lt;reset&gt; - otwiera/zamyka okno kalkulatora\n")
-  cecho("  &lt;yellow&gt;/treningi pomoc&lt;reset&gt; (albo &lt;yellow&gt;/treningi help&lt;reset&gt;) - ten tekst\n")
-  cecho("  &lt;yellow&gt;/treningi tabela&lt;reset&gt; - okno poziomow maksymalnych wg zawodu\n")
-  cecho("  &lt;yellow&gt;/treningi aktualizuj&lt;reset&gt; - sprawdza i pobiera nowa wersje\n")
-  cecho("&lt;yellow&gt;Jak liczyc:&lt;reset&gt;\n")
+  cecho("\n<green>" .. treningi.banner() .. "<reset>\n")
+  cecho("<yellow>Aliasy:<reset>\n")
+  cecho("  <yellow>/treningi<reset> - otwiera/zamyka okno kalkulatora\n")
+  cecho("  <yellow>/treningi pomoc<reset> (albo <yellow>/treningi help<reset>) - ten tekst\n")
+  cecho("  <yellow>/treningi tabela<reset> - okno poziomow maksymalnych wg zawodu\n")
+  cecho("  <yellow>/treningi aktualizuj<reset> - sprawdza i pobiera nowa wersje\n")
+  cecho("<yellow>Jak liczyc:<reset>\n")
   cecho("  1. Wybierz umiejetnosc z listy (filtr nad lista zawija liste).\n")
   cecho("  2. Wpisz koszt treningu z gry (zloto/srebro/miedz) - kalkulator\n")
   cecho("     pokaze obecny poziom. Przelacznik pod polami wybiera, czy podany\n")
   cecho("     koszt dotyczy ostatniego czy nastepnego treningu.\n")
   cecho("  3. Pola 'z poziomu / na poziom' licza laczny koszt przedzialu\n")
   cecho("     (wlacznie). Kolejnosc wpisow nie ma znaczenia.\n")
-  cecho("  &lt;yellow&gt;cios specjalny&lt;reset&gt; - umiejetnosc specjalna z zawodu: cena\n")
+  cecho("  <yellow>cios specjalny<reset> - umiejetnosc specjalna z zawodu: cena\n")
   cecho("     zawsze 100% tabeli; maks. 75% bez polecenia stowarzyszenia, 100% z\n")
   cecho("     poleceniem (przelacznik pod polami przedzialu).\n")
-  cecho("  &lt;yellow&gt;inna umiejetnosc...&lt;reset&gt; - wlasny procent ceny (1-100)\n")
+  cecho("  <yellow>inna umiejetnosc...<reset> - wlasny procent ceny (1-100)\n")
   cecho("     i opcjonalny poziom maksymalny (puste pole = bez limitu).\n")
   cecho("Wszystkie pola zapisuja sie na dysku profilu i wracaja po restarcie.\n")
   cecho("Plugin w pelni zgodny z regulaminem gry - czysty kalkulator,\n")
@@ -1193,8 +1147,8 @@ if type(tempTimer) == "function" then
   tempTimer(10, function() startUpdateCheck(false) end)
 end
 if cecho then
-  cecho("&lt;green&gt;[treningi]&lt;reset&gt; Kalkulator cen treningow v" .. PLUGIN_VERSION ..
-        " zaladowany. Wpisz &lt;yellow&gt;/treningi&lt;reset&gt; (pomoc: &lt;yellow&gt;/treningi pomoc&lt;reset&gt;).\n")
+  cecho("<green>[treningi]<reset> Kalkulator cen treningow v" .. PLUGIN_VERSION ..
+        " zaladowany. Wpisz <yellow>/treningi<reset> (pomoc: <yellow>/treningi pomoc<reset>).\n")
 end
 
 -- Hooki dla lokalnych testow silnika (port harnessa Dargoth).
@@ -1217,11 +1171,3 @@ treningi._test = {
 }
 
 end
-</script>
-		</Script>
-	</ScriptPackage>
-	<KeyPackage />
-	<HelpPackage>
-		<helpURL />
-	</HelpPackage>
-</MudletPackage>
