@@ -1,0 +1,19 @@
+# Validate — bramka well-formedness XML pakietu na kazdy push i PR.
+# Zepsuty XML nie moze trafic na main (warstwa obok build_mpackage.py,
+# ktory waliduje przed zipem, i bramki w harnessie testow).
+name: Validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate-xml:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: "Validate XML (expat, linia/kolumna)"
+        run: python3 scripts/validate_xml.py

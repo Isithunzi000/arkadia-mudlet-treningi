@@ -1,0 +1,80 @@
+# Release — tag v* publikuje treningi.xml + treningi.mpackage (F3: stala nazwa).
+# Guard: tag (bez v) == PLUGIN_VERSION w treningi.xml (mismatch = exit 1).
+# Bramka determinizmu: dwukrotny build musi dac identyczny SHA-256.
+# Idempotencja: ponowny run dla istniejacego release nadpisuje assety (--clobber).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0  # pelna historia + tagi (git describe przy workflow_dispatch)
+
+      - name: Ustal tag
+        id: tag
+        run: |
+          set -euo pipefail
+          if [ -n "${GITHUB_REF_NAME:-}" ] && [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$(git describe --tags --abbrev=0)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: "Guard: tag == PLUGIN_VERSION w XML"
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          VER="${TAG#v}"
+          XMLV=$(grep -oP 'local PLUGIN_VERSION = "\K[^"]+' treningi.xml | head -1)
+          echo "tag=$TAG  PLUGIN_VERSION=$XMLV"
+          if [ "$XMLV" != "$VER" ]; then
+            echo "BLAD: niespojnosc wersji (tag $TAG vs XML $XMLV)" >&2
+            exit 1
+          fi
+
+      - name: "Validate XML (expat, linia/kolumna)"
+        run: python3 scripts/validate_xml.py
+
+      - name: "Bramka determinizmu: build 2x, identyczny SHA-256"
+        run: |
+          set -euo pipefail
+          python3 scripts/build_mpackage.py
+          S1=$(sha256sum dist/*.mpackage | awk '{print $1}')
+          python3 scripts/build_mpackage.py
+          S2=$(sha256sum dist/*.mpackage | awk '{print $1}')
+          echo "SHA-256 mpackage: $S1"
+          if [ "$S1" != "$S2" ]; then
+            echo "BLAD: build niedeterministyczny ($S1 != $S2)" >&2
+            exit 1
+          fi
+
+      - name: Release z assetami (.xml + .mpackage)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/treningi.xml dist/*.mpackage --clobber
+          else
+            gh release create "$TAG" dist/treningi.xml dist/*.mpackage \
+              --title "Treningi $TAG" \
+              --notes "Automatyczny release z taga $TAG."
+          fi
