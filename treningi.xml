@@ -60,7 +60,7 @@ treningi = treningi or {}
 
 do
 
-local PLUGIN_VERSION = "1.0.6m"
+local PLUGIN_VERSION = "1.0.7m"
 local PLUGIN_BUILD   = "24-09-2026"
 
 treningi.version = PLUGIN_VERSION
@@ -426,29 +426,51 @@ treningi.gui = gui
 
 -- Paleta: ciemny granat z niebieskim akcentem, wysoki kontrast rol
 -- (naglowki sekcji, pola, wynik, nominaly) - nic sie nie zlewa.
+-- Paleta 1:1 z wtyczka Dargoth (klient www): te same hex co w jej CSS.
 local STYLE = {
-  btn     = "background-color:#2b3444;color:#dfe6f2;border:1px solid #46536b;border-radius:4px;",
-  primary = "background-color:#1f6feb;color:#ffffff;border:1px solid #58a6ff;border-radius:4px;font-weight:bold;",
-  field   = "background-color:#12161d;color:#eef2f8;border:1px solid #3a4557;",
-  title   = "color:#f0f3f8;background-color:transparent;",
-  meta    = "color:#58a6ff;font-weight:bold;background-color:transparent;",
-  lbl     = "color:#9ba7ba;background-color:transparent;",
-  nota    = "color:#e0b85c;font-style:italic;background-color:transparent;",
-  row     = "background-color:#161b23;color:#d5dce8;border-bottom:1px solid #232a35;",
-  rowSpec = "background-color:#161b23;color:#e0b85c;border-bottom:1px solid #232a35;",
-  rowSel  = "background-color:#1f6feb;color:#ffffff;border-bottom:1px solid #232a35;font-weight:bold;",
-  panel   = "background-color:#0f1420;color:#79c0ff;font-size:20pt;font-weight:bold;border:2px solid #1f6feb;border-radius:6px;",
-  panelLbl= "color:#9ba7ba;background-color:transparent;",
-  mth     = "background-color:#1c2f52;color:#9fc0ff;border:1px solid #2f4a7a;border-radius:3px;font-weight:bold;",
-  zl      = "background-color:#3d3416;color:#ffd766;border:1px solid #6b5a24;border-radius:3px;font-weight:bold;",
-  sr      = "background-color:#2e3138;color:#d5d9e0;border:1px solid #4a4f58;border-radius:3px;font-weight:bold;",
-  mz      = "background-color:#3a2418;color:#e8a87c;border:1px solid #5f3a26;border-radius:3px;font-weight:bold;",
-  footlink= "color:#9ba7ba;background-color:transparent;border:none;text-align:left;",
+  btn     = "background-color:#23233a;color:#b9b9d6;border:1px solid #3d3d5c;border-radius:8px;",
+  primary = "background-color:#31437a;color:#ffffff;border:1px solid #7aa2f7;border-radius:8px;font-weight:bold;",
+  field   = "background-color:#23233a;color:#e6e6f0;border:1px solid #3d3d5c;border-radius:8px;",
+  wybrana = "background-color:#23233a;color:#9fc0ff;border:1px solid #3d3d5c;border-radius:7px;",
+  title   = "color:#e6e6f0;background-color:transparent;",
+  meta    = "color:#9a9ab5;font-weight:bold;background-color:transparent;",
+  lbl     = "color:#9a9ab5;background-color:transparent;",
+  nota    = "color:#8c8ca8;font-style:italic;background-color:transparent;",
+  row     = "background-color:transparent;color:#d8d8e8;border-bottom:1px solid #26263e;",
+  rowSpec = "background-color:transparent;color:#d8d8e8;border-bottom:1px solid #26263e;",
+  rowSel  = "background-color:#31437a;color:#ffffff;border-bottom:1px solid #26263e;font-weight:bold;",
+  panel   = "background-color:#1d1d30;color:#7aa2f7;font-size:30px;font-weight:bold;border:1px solid #3d3d5c;border-radius:8px;",
+  panelLbl= "color:#9a9ab5;background-color:transparent;",
+  mth     = "background-color:#2c3d66;color:#9fc0ff;border-radius:10px;font-weight:bold;",
+  zl      = "background-color:#4d4020;color:#ffd766;border-radius:10px;font-weight:bold;",
+  sr      = "background-color:#3c3c46;color:#d5d5e0;border-radius:10px;font-weight:bold;",
+  mz      = "background-color:#4a3128;color:#e8a87c;border-radius:10px;font-weight:bold;",
+  dotZl   = "background-color:#d4af37;border-radius:4px;",
+  dotSr   = "background-color:#b8b8c0;border-radius:4px;",
+  dotMz   = "background-color:#b5724a;border-radius:4px;",
+  footlink= "color:#9a9ab5;background-color:transparent;border:none;qproperty-alignment: AlignRight;",
+  listaBg = "background-color:#1d1d30;border:1px solid #3d3d5c;border-radius:8px;",
 }
 
+-- Ciemny styl kontenerow zamiast domyslnej bialej ramki "groove white"
+-- (Adjustable.Container przyjmuje adjLabelstyle/buttonstyle w konstruktorze;
+-- okna pozostaja przesuwalne i skalowalne mysza).
+local ADJ_STYLE = [[background-color:#16161e;border:1px solid #3d3d5c;]]
+local ADJ_BTN_STYLE = [[
+QLabel{ background-color:#16161e;color:#9a9ab5;border:1px solid #3d3d5c; }
+QLabel::hover{ background-color:#31437a;color:#ffffff; }
+]]
+
 -- Granice wnetrza okna (jak w truwerze, zmierzone na zywym kliencie):
--- Inside ma 620 px szerokosci, dolna widoczna granica tresci to y+h =&lt; 540.
-local RIGHT_EDGE  = 620
+-- Tresc konczy sie na x=610, a okno ma 670 px (610 + padding 30 lewy +
+-- padding 30 prawy): Inside w Geyserze ma z natury zerowy prawy margines,
+-- wiec symetryczny margines uzyskujemy poszerzeniem okna o padding.
+-- Dolna widoczna granica tresci to y+h =&lt; 540.
+local RIGHT_EDGE  = 610
+-- CONT_PAD (padding kontenerow) = 30 - definicja nizej, tu wartosc
+-- wkomponowana w stale szerokosci.
+local WIN_W       = 670  -- 610 + 2 * 30 (symetria marginesow)
+local TAB_W       = 910  -- 10 + 840 konsola + 2 * 30
 local FOOTER_Y    = 514
 
 local function applyStyle(l, css)
@@ -649,6 +671,23 @@ local function setLbl(name, text)
   if l then l:echo(text) end
 end
 
+-- echo() w Mudlet 5.0.1 resetuje font/kolor z CSS labelki, wiec duzy wynik
+-- i kolorowe teksty chipow ida w &lt;span style="..."&gt; (zmierzone na zywym
+-- kliencie: samo font-size/color w setStyleSheet nie dziala na echo).
+local function wynikHtml(s)
+  return '&lt;span style="font-size:30px;color:#7aa2f7;font-weight:bold;"&gt;'
+         .. s .. "&lt;/span&gt;"
+end
+
+-- Kolory tekstu chipow nominalow 1:1 z Dargoth (klucz = skrot nominalu).
+local CHIP_FG = { mth = "#9fc0ff", zl = "#ffd766", sr = "#d5d5e0",
+                  mdz = "#e8a87c" }
+
+local function chipHtml(tekst, nominal)
+  return '&lt;span style="color:' .. CHIP_FG[nominal] .. ';"&gt; '
+         .. tekst .. " &lt;/span&gt;"
+end
+
 local function showLbl(name, on)
   local l = gui.managed[name]
   if not l then return end
@@ -667,7 +706,7 @@ function gui.odswiez()
   showLbl("trng.ciosPol", czyCios)
 
   if stan.umiejetnosc &lt; 0 then
-    setLbl("trng.poziom", "-")
+    setLbl("trng.poziom", wynikHtml("-"))
     setLbl("trng.podpowiedz", "Wybierz umiejetnosc z listy powyzej.")
     showLbl("trng.podpowiedz", true)
     showLbl("trng.wybrana", false)
@@ -688,7 +727,7 @@ function gui.odswiez()
   local sr = sanitizujLiczbe(stan.srebro, MAKS_KWOTA)
   local mz = sanitizujLiczbe(stan.miedz, MAKS_KWOTA)
   local poziom = obecnyPoziom(zl, sr, mz, k, stan.tryb)
-  setLbl("trng.poziom", poziom .. "%")
+  setLbl("trng.poziom", wynikHtml(poziom .. "%"))
 
   local od = sanitizujLiczbe(stan.od, MAKS_POZIOM)
   local doo = sanitizujLiczbe(stan.doo, MAKS_POZIOM)
@@ -720,7 +759,7 @@ function gui.odswiez()
   local puste = true
   for _, c in ipairs(chips) do
     if c[2] &gt; 0 then
-      setLbl(c[1], " " .. formatujLiczbe(c[2]) .. " " .. c[3] .. " ")
+      setLbl(c[1], chipHtml(formatujLiczbe(c[2]) .. " " .. c[3], c[3]))
       showLbl(c[1], true)
       puste = false
     else
@@ -728,11 +767,10 @@ function gui.odswiez()
     end
   end
   if puste then
-    setLbl("trng.chip.mz", " 0 mdz ")
+    setLbl("trng.chip.mz", chipHtml("0 mdz", "mdz"))
     showLbl("trng.chip.mz", true)
   end
 
-  setLbl("trng.razem", "razem: " .. formatujLiczbe(wynik.miedziRazem) .. " mdz")
   showLbl("trng.razem", true)
 
   if wynik.obcietyDo ~= nil then
@@ -774,21 +812,25 @@ function gui.render()
     stan.filtr = t
     renderLista()
   end)
-  txt("trng.wybrana", 310, 4, 300, 24, "", gui.win, STYLE.lbl)
+  txt("trng.wybrana", 310, 4, 300, 24, "", gui.win, STYLE.wybrana)
 
   -- Lista umiejetnosci
   if not gui.lista then
     gui.lista = Geyser.ScrollBox:new({ name = "trng.lista", x = 10, y = 32,
                                        width = 600, height = 150 }, gui.win)
-    applyStyle(gui.lista, "background-color:#0f1319;")
+    applyStyle(gui.lista, STYLE.listaBg)
   end
   renderLista()
 
   -- Sekcja: koszt treningu -&gt; poziom
   txt("trng.sec1", 10, 188, 400, 16, "KOSZT TRENINGU -&gt; POZIOM", gui.win, STYLE.meta)
-  txt("trng.zl.lbl", 10, 206, 193, 14, "zloto (zl)", gui.win, STYLE.lbl)
-  txt("trng.sr.lbl", 213, 206, 193, 14, "srebro (sr)", gui.win, STYLE.lbl)
-  txt("trng.mz.lbl", 416, 206, 194, 14, "miedz (mdz)", gui.win, STYLE.lbl)
+  -- Etykiety pol walut z kolorowymi kropkami (jak .trng-kropka w Dargoth)
+  txt("trng.dot.zl", 12, 209, 8, 8, "", gui.win, STYLE.dotZl)
+  txt("trng.dot.sr", 215, 209, 8, 8, "", gui.win, STYLE.dotSr)
+  txt("trng.dot.mz", 418, 209, 8, 8, "", gui.win, STYLE.dotMz)
+  txt("trng.zl.lbl", 26, 206, 177, 14, "zloto (zl)", gui.win, STYLE.lbl)
+  txt("trng.sr.lbl", 229, 206, 177, 14, "srebro (sr)", gui.win, STYLE.lbl)
+  txt("trng.mz.lbl", 432, 206, 178, 14, "miedz (mdz)", gui.win, STYLE.lbl)
   pole("trng.zl", 10, 222, 193, stan.zloto, function(t) stan.zloto = t end)
   pole("trng.sr", 213, 222, 193, stan.srebro, function(t) stan.srebro = t end)
   pole("trng.mz", 416, 222, 194, stan.miedz, function(t) stan.miedz = t end)
@@ -844,11 +886,13 @@ function gui.render()
   ciosBtnRefresh()
 
   -- Wynik przedzialu: nominaly + razem + notka
-  txt("trng.chip.mth", 10, 470, 140, 24, "", gui.win, STYLE.mth)
-  txt("trng.chip.zl", 158, 470, 140, 24, "", gui.win, STYLE.zl)
-  txt("trng.chip.sr", 306, 470, 140, 24, "", gui.win, STYLE.sr)
-  txt("trng.chip.mz", 454, 470, 156, 24, "", gui.win, STYLE.mz)
-  txt("trng.razem", 10, 498, 300, 16, "", gui.win, STYLE.lbl)
+  -- "Razem:" to tylko etykieta rzedu chipow; kwote pokazuja same chipy
+  -- (bez duplikatu "1 mdz" pod brazowym paskiem).
+  txt("trng.razem", 10, 470, 64, 24, "Razem:", gui.win, STYLE.lbl)
+  txt("trng.chip.mth", 82, 470, 120, 24, "", gui.win, STYLE.mth)
+  txt("trng.chip.zl", 210, 470, 120, 24, "", gui.win, STYLE.zl)
+  txt("trng.chip.sr", 338, 470, 120, 24, "", gui.win, STYLE.sr)
+  txt("trng.chip.mz", 466, 470, 120, 24, "", gui.win, STYLE.mz)
   txt("trng.notka", 320, 498, 290, 16, "", gui.win, STYLE.nota)
 
   -- Stopka: pomoc, tabela, wersja
@@ -865,15 +909,32 @@ function gui.render()
   gui.odswiez()
 end
 
+-- Model empiryczny (Mudlet 5.0.1, sonda na zywym kliencie): dzieci
+-- Adjustable.Container laduja w Inside, ktorego y=0 to padding*2 px pod
+-- szczytem okna (pasek tytulu, lockStyle standard). Padding 30 daje pasek
+-- 60 px - tresc nie nachodzi na tytul (domyslne 10 dawalo tylko 20 px).
+-- Wysokosc okna musi pokryc zawartosc + 70 px, inaczej tresc wychodzi
+-- poza dolna ramke.
+local CONT_PAD  = 30
+local INSIDE_TOP = CONT_PAD * 2  -- 60
+local WIN_H = 620  -- zawartosc do 538 + INSIDE_TOP + margines 10
+local TAB_H = 750  -- konsola 38+628 + INSIDE_TOP + margines
+
 function gui.build()
   if gui.win then return end
   gui.win = Adjustable.Container:new({
     name = "treningi",
-    x = 40, y = 40, width = 640, height = 560,
+    x = 40, y = 40, width = WIN_W, height = WIN_H,
     titleText = "Treningi - kalkulator cen treningow",
-    titleTxtColor = "#f0f3f8",
+    titleTxtColor = "#e6e6f0",
     titleFormat = "lb14",
+    padding = CONT_PAD,
+    adjLabelstyle = ADJ_STYLE,
+    buttonstyle = ADJ_BTN_STYLE,
   })
+  -- autoLoad moze wgrac mniejszy rozmiar z poprzedniej wersji: wymus minimum.
+  if gui.win:get_height() &lt; WIN_H then gui.win:resize(nil, WIN_H) end
+  if gui.win:get_width() &lt; WIN_W then gui.win:resize(WIN_W, nil) end
   gui.win:hide() -- start ukryty (jak zamkniety popup w Dargoth)
   gui.render()
 end
@@ -914,33 +975,64 @@ end
 -- Tabela 1:1 z klientem www/Dargoth: intro, skroty referencyjne, zawod
 -- ktory nie oferuje umiejetnosci pokazuje wartosc GP przygaszona, tryb
 -- "bez polecenia" dopisuje notke o przyblizeniach. Bez wlasnych legend.
+-- Paleta RGB 1:1 z CSS Dargoth: wartosci #c9c9dc, zebra #20203a/#1b1b2e,
+-- kolumna GP biala na #31437a, nie-oferuje #8c8ca8, przyblizenia #8ea6e8.
+local TC = {
+  intro   = "154,154,181",   -- #9a9ab5
+  hdrFg   = "185,185,214",   -- #b9b9d6
+  hdrBg   = "35,35,58",      -- #23233a
+  zebraA  = "32,32,58",      -- #20203a (nieparzyste)
+  zebraB  = "27,27,46",      -- #1b1b2e (parzyste)
+  nazwa   = "216,216,232",   -- #d8d8e8
+  wart    = "232,232,242",   -- #e8e8f2 (wysoki kontrast do przygaszonych)
+  przygas = "90,90,120",     -- #5a5a78 (nie oferuje: wyraznie ciemniejsze)
+  przybl  = "142,166,232",   -- #8ea6e8 (tryb bez polecenia)
+  gpFg    = "255,255,255",
+  gpBg    = "49,67,122",     -- #31437a
+}
+
+local function tabCell(fg, bg, s)
+  gui.tabcon:decho("&lt;" .. fg .. ":" .. bg .. "&gt;" .. padRight(s, TAB_CELL_W))
+end
+
 local function renderTabela()
   if not gui.tabcon then return end
   gui.tabcon:clear()
   local pol = gui.tabPolecenie
-  gui.tabcon:cecho("&lt;dim_grey&gt;Poziom maksymalny umiejetnosci w danym zawodzie. 1 trening = 1%.\n\n")
-  gui.tabcon:cecho("&lt;yellow&gt;" .. padRight("umiejetnosc", TAB_NAME_W))
+  gui.tabcon:decho("&lt;" .. TC.intro ..
+    "&gt;Poziom maksymalny umiejetnosci w danym zawodzie. 1 trening = 1%.\n\n")
+  -- Naglowek (jak thead w Dargoth: tlo #23233a na calej linii)
+  gui.tabcon:decho("&lt;" .. TC.hdrFg .. ":" .. TC.hdrBg .. "&gt;" ..
+                   padRight("umiejetnosc", TAB_NAME_W))
   for i = 1, #ZAWODY_SKROTY do
-    local skrot = padRight(ZAWODY_SKROTY[i], TAB_CELL_W)
-    gui.tabcon:cecho((i == #ZAWODY_SKROTY and "&lt;cyan&gt;" or "&lt;white&gt;") .. skrot)
+    tabCell(TC.hdrFg, TC.hdrBg, ZAWODY_SKROTY[i])
   end
-  gui.tabcon:echo("\n")
-  for _, w in ipairs(TABELA_POZIOMOW) do
-    gui.tabcon:cecho("&lt;white&gt;" .. padRight(w.um, TAB_NAME_W))
+  gui.tabcon:decho("&lt;r&gt;\n")
+  for r, w in ipairs(TABELA_POZIOMOW) do
+    local zebra = (r % 2 == 1) and TC.zebraA or TC.zebraB
+    gui.tabcon:decho("&lt;" .. TC.nazwa .. ":" .. zebra .. "&gt;" ..
+                     padRight(w.um, TAB_NAME_W))
     for i = 1, #ZAWODY do
       local lw = limitWyswietlany(w.um, ZAWODY[i], pol)
-      local color = "&lt;light_slate_grey&gt;"
-      if i == #ZAWODY then color = "&lt;cyan&gt;" end
-      if w.limity[i] &lt; 0 then color = "&lt;dim_grey&gt;" end -- nie oferuje: GP przygaszone
-      gui.tabcon:cecho(color .. padRight(lw and lw.wartosc or "-", TAB_CELL_W))
+      if i == #ZAWODY then
+        tabCell(TC.gpFg, TC.gpBg, lw and lw.wartosc or "-")   -- kolumna GP
+      elseif w.limity[i] &lt; 0 then
+        tabCell(TC.przygas, zebra, lw and lw.wartosc or "-") -- nie oferuje
+      elseif lw and lw.przyblizona then
+        tabCell(TC.przybl, zebra, lw.wartosc)                -- przyblizenie
+      else
+        tabCell(TC.wart, zebra, lw and lw.wartosc or "-")
+      end
     end
-    gui.tabcon:echo("\n")
+    gui.tabcon:decho("&lt;r&gt;\n")
   end
-  gui.tabcon:cecho("\n&lt;dim_grey&gt;Przygaszone = limit jak w GP + ciosy specjalne: "
-                   .. "75% bez polecenia, 100% z poleceniem.\n")
+  gui.tabcon:decho("\n&lt;" .. TC.intro ..
+    "&gt;Przygaszone = limit jak w GP + ciosy specjalne: "
+    .. "75% bez polecenia, 100% z poleceniem.\n")
   if not pol then
-    gui.tabcon:cecho("&lt;dim_grey&gt;Wartosci w tym trybie sa przyblizone "
-                     .. "(GP + 75% roznicy miedzy zawodem a GP).\n")
+    gui.tabcon:decho("&lt;" .. TC.intro ..
+      "&gt;Wartosci w tym trybie sa przyblizone "
+      .. "(GP + 75% roznicy miedzy zawodem a GP).\n")
   end
 end
 
@@ -955,11 +1047,17 @@ function gui.buildTabela()
   if gui.tabwin then return end
   gui.tabwin = Adjustable.Container:new({
     name = "treningi_tabela",
-    x = 90, y = 30, width = 870, height = 680,
+    x = 90, y = 30, width = TAB_W, height = TAB_H,
     titleText = "Treningi - poziomy maksymalne wg zawodu",
-    titleTxtColor = "#f0f3f8",
+    titleTxtColor = "#e6e6f0",
     titleFormat = "lb14",
+    padding = CONT_PAD,
+    adjLabelstyle = ADJ_STYLE,
+    buttonstyle = ADJ_BTN_STYLE,
   })
+  -- autoLoad moze wgrac mniejszy rozmiar z poprzedniej wersji: wymus minimum.
+  if gui.tabwin:get_height() &lt; TAB_H then gui.tabwin:resize(nil, TAB_H) end
+  if gui.tabwin:get_width() &lt; TAB_W then gui.tabwin:resize(TAB_W, nil) end
   btn("trng.tab.z", 10, 4, 200, "z poleceniem", function()
     gui.tabPolecenie = true
     tabBtnRefresh(); renderTabela()
@@ -971,12 +1069,13 @@ function gui.buildTabela()
   gui.tabcon = Geyser.MiniConsole:new({
     -- 32 linie tabeli (tryb bez polecenia) * ~19 px/linia (Mudlet 5.0.1,
     -- fontSize 9) = 608 px; wiersz = 102 znaki * ~7.8 px = ~796 px.
-    -- Konsola i okno musza miescic calosc bez scrolla i bez ucinania GP.
-    name = "trng.tabcon", x = 10, y = 38, width = 840, height = 630,
+    -- Wysokosc okna = konsola + INSIDE_TOP + marginesy (model empiryczny).
+    name = "trng.tabcon", x = 10, y = 38, width = 840, height = 628,
     wrapAt = TAB_NAME_W + #ZAWODY * TAB_CELL_W + 2,
   }, gui.tabwin)
   pcall(function() gui.tabcon:setFont("Monospace") end)
   pcall(function() gui.tabcon:setFontSize(9) end)
+  pcall(function() gui.tabcon:setBgColor(22, 22, 30) end) -- #16161e jak okno
   tabBtnRefresh()
   renderTabela()
   gui.tabwin:hide()
