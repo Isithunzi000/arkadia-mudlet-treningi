@@ -887,7 +887,7 @@ function gui.build()
   -- autoLoad moze wgrac mniejszy rozmiar z poprzedniej wersji: wymus minimum.
   -- Odpornosc na nil: na Mudlet Web get_width/get_height zwraca nil dla
   -- niegotowego kontenera i surowe porownanie przerywalo build (bug E2E
-  -- web: pierwsze otwarcie okna padało cicho, drugie dzialalo).
+  -- web: pierwsze otwarcie okna padalo cicho, drugie dzialalo).
   pcall(function()
     if (gui.win:get_height() or 0) < WIN_H then gui.win:resize(nil, WIN_H) end
     if (gui.win:get_width() or 0) < WIN_W then gui.win:resize(WIN_W, nil) end
