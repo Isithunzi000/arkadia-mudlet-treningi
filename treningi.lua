@@ -14,7 +14,7 @@ treningi = treningi or {}
 
 do
 
-local PLUGIN_VERSION = "1.0.8m"
+local PLUGIN_VERSION = "1.0.9m"
 local PLUGIN_BUILD   = "25-09-2026"
 
 treningi.version = PLUGIN_VERSION
@@ -936,7 +936,9 @@ end
 -- ktory nie oferuje umiejetnosci pokazuje wartosc GP przygaszona, tryb
 -- "bez polecenia" dopisuje notke o przyblizeniach. Bez wlasnych legend.
 -- Paleta RGB 1:1 z CSS Dargoth: wartosci #c9c9dc, zebra #20203a/#1b1b2e,
--- kolumna GP biala na #31437a, nie-oferuje #8c8ca8, przyblizenia #8ea6e8.
+-- kolumna GP biala na #31437a, nie-oferuje #8c8ca8. Przyblizenia (tryb bez
+-- polecenia) maja ten sam kolor co wartosci dokladne (decyzja ownera:
+-- spojne kolory/kontrasty obu trybow, jak w wariancie z poleceniem).
 local TC = {
   intro   = "154,154,181",   -- #9a9ab5
   hdrFg   = "185,185,214",   -- #b9b9d6
@@ -946,7 +948,6 @@ local TC = {
   nazwa   = "216,216,232",   -- #d8d8e8
   wart    = "232,232,242",   -- #e8e8f2 (wysoki kontrast do przygaszonych)
   przygas = "90,90,120",     -- #5a5a78 (nie oferuje: wyraznie ciemniejsze)
-  przybl  = "142,166,232",   -- #8ea6e8 (tryb bez polecenia)
   gpFg    = "255,255,255",
   gpBg    = "49,67,122",     -- #31437a
 }
@@ -979,7 +980,7 @@ local function renderTabela()
       elseif w.limity[i] < 0 then
         tabCell(TC.przygas, zebra, lw and lw.wartosc or "-") -- nie oferuje
       elseif lw and lw.przyblizona then
-        tabCell(TC.przybl, zebra, lw.wartosc)                -- przyblizenie
+        tabCell(TC.wart, zebra, lw.wartosc)  -- przyblizenie: kolor jak dokladne
       else
         tabCell(TC.wart, zebra, lw and lw.wartosc or "-")
       end
@@ -1052,8 +1053,17 @@ function gui.toggleTabela()
     return
   end
   gui.tabOpen = true
+  -- Geyser autoLoad moze wgrac minimized=true z poprzedniej sesji: okno
+  -- otwieraloby sie jako pusta ramka (Inside ukryty) i toggle nigdy by tego
+  -- nie naprawil. Przywroc okno i wymus widocznosc wnetrza przed show.
+  pcall(function()
+    if gui.tabwin.minimized then gui.tabwin:restore() end
+  end)
   renderTabela()
   gui.tabwin:show()
+  pcall(function()
+    if gui.tabwin.Inside then gui.tabwin.Inside:show() end
+  end)
   pcall(raiseWindow, "treningi_tabela")
 end
 
