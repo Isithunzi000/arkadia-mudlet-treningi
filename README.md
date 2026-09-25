@@ -28,7 +28,7 @@ Plik [`treningi.xml`](treningi.xml) w korzeniu repo to źródło pakietu — mo�
 - **obecny poziom umiejętności** z kosztu treningu (złoto/srebro/miedź) — przełącznik wybiera, czy podany koszt dotyczy ostatniego czy następnego treningu
 - **łączny koszt przedziału treningów** (z poziomu → na poziom, włącznie), z rozbiciem na mithryl/złoto/srebro/miedź
 - 39 umiejętności ze zmierzonymi procentami ceny, filtr nad listą
-- **cios specjalny** — cena zawsze 100% tabeli; maks. 75% bez polecenia stowarzyszenia, 100% z poleceniem (przełącznik w oknie)
+- **cios specjalny** — cena zawsze 100% tabeli; maks. 75%
 - **inna umiejętność…** — własny procent ceny (1–100) i opcjonalny poziom maksymalny
 - **Tabela zawodów** (przycisk w oknie albo `/treningi tabela`): poziomy maksymalne wg zawodu, z poleceniem lub bez; wartości przybliżone oznaczone `~`
 

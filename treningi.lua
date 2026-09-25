@@ -14,8 +14,8 @@ treningi = treningi or {}
 
 do
 
-local PLUGIN_VERSION = "1.0.7m"
-local PLUGIN_BUILD   = "24-09-2026"
+local PLUGIN_VERSION = "1.0.8m"
+local PLUGIN_BUILD   = "25-09-2026"
 
 treningi.version = PLUGIN_VERSION
 treningi.build   = PLUGIN_BUILD
@@ -84,11 +84,10 @@ local UMIEJETNOSCI = {
 local CIOS_IDX = #UMIEJETNOSCI + 1 -- cios specjalny (umiejetnosc specjalna)
 local INNA_IDX = #UMIEJETNOSCI + 2 -- "inna umiejetnosc..."
 
--- Cios specjalny: cena zawsze 100% tabeli; maks. 75 bez polecenia
--- stowarzyszenia, 100 z poleceniem (jedyna kategoria ponad limity zawodow).
+-- Cios specjalny: cena zawsze 100% tabeli; maks. 75 (bez przelacznika
+-- z/bez polecenia - decyzja ownera 2026-09-25, procenty swiadomie od/do).
 local CIOS_PROCENT  = 100
-local CIOS_MAX_BEZ  = 75
-local CIOS_MAX_Z    = 100
+local CIOS_MAX      = 75
 
 local function naMiedz(zl, sr, mdz)
   return zl * MIEDZ_NA_ZLOTO + sr * MIEDZ_NA_SREBRO + mdz
@@ -305,7 +304,6 @@ local STAN_DOMYSLNY = {
   od = "", doo = "",
   innaProcent = "100",     -- procent ceny dla "innej umiejetnosci" (1-100)
   innaMaxPoziom = "",      -- poziom maksymalny dla "innej" (pusty = bez limitu)
-  polecenie = false,       -- cios specjalny: z poleceniem stowarzyszenia
 }
 
 local stan = { filtr = "" }
@@ -336,7 +334,8 @@ local function wczytajStan()
   if type(t.innaMaxPoziom) == "string" and limitZWpisu(t.innaMaxPoziom) ~= nil then
     stan.innaMaxPoziom = tostring(limitZWpisu(t.innaMaxPoziom))
   end
-  stan.polecenie = t.polecenie == true
+  -- Pole polecenie ze starej wersji celowo ignorowane (przelacznik
+  -- z/bez polecenia usuniety z okna glownego; cios liczy z limitem 75%).
 end
 
 local function zapiszStan()
@@ -357,9 +356,7 @@ end
 -- Poziom maksymalny dla wybranej pozycji; nil = bez limitu.
 local function aktualnyMaks()
   if stan.umiejetnosc == INNA_IDX then return limitZWpisu(stan.innaMaxPoziom) end
-  if stan.umiejetnosc == CIOS_IDX then
-    return stan.polecenie and CIOS_MAX_Z or CIOS_MAX_BEZ
-  end
+  if stan.umiejetnosc == CIOS_IDX then return CIOS_MAX end
   return nil
 end
 
@@ -536,6 +533,21 @@ end
 
 local renderLista -- fwd: gui.poll (wyzej) odswieza liste po zmianie filtra
 
+-- Podniesienie interaktywnych widgetow okna NAD wiersze listy: na Mudlet
+-- Web wiersze ScrollBox nie sa clipowane przez pojemnik i ich przezroczyste
+-- overlaye przykrywaja przyciski/pola w dolnej czesci okna (bug E2E web:
+-- klikniecie Tabela trafialo w niewidzialny wiersz listy). raiseWindow jest
+-- no-op, jesli klient go nie ma (starsze Mudlety). Wywolywane po kazdym
+-- renderze listy, bo filtrowanie tworzy wiersze od nowa.
+local function podniesInteraktywne()
+  if type(raiseWindow) ~= "function" then return end
+  for name, _ in pairs(gui.managed) do
+    if name ~= "trng.lista" and not name:match("^trng.row%.") then
+      pcall(raiseWindow, name)
+    end
+  end
+end
+
 -- Live odczyt pol bez Entera (jak event "input" w kliencie www): cykliczny
 -- poll getCmdLine; zmiana filtra odswieza liste, zmiana innych pol wynik.
 -- Poll NIGDY nie wywoluje gui.render (print do pola kasowalby wpisywanie).
@@ -614,6 +626,7 @@ renderLista = function()
   for i = #wpisy + 1, #gui.rows do
     gui.rows[i]:hide()
   end
+  podniesInteraktywne()
 end
 
 -- ---------------------------------------------------------------------------
@@ -657,7 +670,6 @@ function gui.odswiez()
   showLbl("trng.innaProc", czyInna)
   showLbl("trng.innaMax.lbl", czyInna)
   showLbl("trng.innaMax", czyInna)
-  showLbl("trng.ciosPol", czyCios)
 
   if stan.umiejetnosc < 0 then
     setLbl("trng.poziom", wynikHtml("-"))
@@ -750,14 +762,6 @@ local function trybBtnRefresh()
   if b then applyStyle(b, stan.tryb == "nastepny" and STYLE.primary or STYLE.btn) end
 end
 
-local function ciosBtnRefresh()
-  local l = gui.managed["trng.ciosPol"]
-  if not l then return end
-  l:echo("Polecenie stowarzyszenia: " .. (stan.polecenie and "TAK" or "NIE") ..
-         "  (maks. " .. (stan.polecenie and CIOS_MAX_Z or CIOS_MAX_BEZ) .. "%)")
-  applyStyle(l, stan.polecenie and STYLE.primary or STYLE.btn)
-end
-
 function gui.render()
   if not gui.win then return end
 
@@ -833,12 +837,6 @@ function gui.render()
   pole("trng.innaMax", 320, 438, 90, stan.innaMaxPoziom, function(t)
     stan.innaMaxPoziom = t
   end)
-  btn("trng.ciosPol", 10, 422, 400, "", function()
-    stan.polecenie = not stan.polecenie
-    zapiszStan(); ciosBtnRefresh(); gui.odswiez()
-  end)
-  ciosBtnRefresh()
-
   -- Wynik przedzialu: nominaly + razem + notka
   -- "Razem:" to tylko etykieta rzedu chipow; kwote pokazuja same chipy
   -- (bez duplikatu "1 mdz" pod brazowym paskiem).
@@ -887,8 +885,13 @@ function gui.build()
     buttonstyle = ADJ_BTN_STYLE,
   })
   -- autoLoad moze wgrac mniejszy rozmiar z poprzedniej wersji: wymus minimum.
-  if gui.win:get_height() < WIN_H then gui.win:resize(nil, WIN_H) end
-  if gui.win:get_width() < WIN_W then gui.win:resize(WIN_W, nil) end
+  -- Odpornosc na nil: na Mudlet Web get_width/get_height zwraca nil dla
+  -- niegotowego kontenera i surowe porownanie przerywalo build (bug E2E
+  -- web: pierwsze otwarcie okna padało cicho, drugie dzialalo).
+  pcall(function()
+    if (gui.win:get_height() or 0) < WIN_H then gui.win:resize(nil, WIN_H) end
+    if (gui.win:get_width() or 0) < WIN_W then gui.win:resize(WIN_W, nil) end
+  end)
   gui.win:hide() -- start ukryty (jak zamkniety popup w Dargoth)
   gui.render()
 end
@@ -906,6 +909,9 @@ function gui.toggle()
   gui.open = true
   gui.render()
   gui.win:show()
+  -- Mudlet Web: okna nakladaja sie w jednej warstwie; bez raise otwarte
+  -- okno moze zostac POD tabela (wyglada jakby komenda nie zadzialala).
+  pcall(raiseWindow, "treningi")
   -- Live odczyt pol (filtr + ceny) bez Entera.
   if gui.pollTimer then killTimer(gui.pollTimer) end
   gui.pollTimer = tempTimer(0.4, function() gui.poll() end, true)
@@ -1010,8 +1016,11 @@ function gui.buildTabela()
     buttonstyle = ADJ_BTN_STYLE,
   })
   -- autoLoad moze wgrac mniejszy rozmiar z poprzedniej wersji: wymus minimum.
-  if gui.tabwin:get_height() < TAB_H then gui.tabwin:resize(nil, TAB_H) end
-  if gui.tabwin:get_width() < TAB_W then gui.tabwin:resize(TAB_W, nil) end
+  -- Nil-safe jak w gui.build (mudlet-web zwraca nil na niegotowym kontenerze).
+  pcall(function()
+    if (gui.tabwin:get_height() or 0) < TAB_H then gui.tabwin:resize(nil, TAB_H) end
+    if (gui.tabwin:get_width() or 0) < TAB_W then gui.tabwin:resize(TAB_W, nil) end
+  end)
   btn("trng.tab.z", 10, 4, 200, "z poleceniem", function()
     gui.tabPolecenie = true
     tabBtnRefresh(); renderTabela()
@@ -1045,6 +1054,7 @@ function gui.toggleTabela()
   gui.tabOpen = true
   renderTabela()
   gui.tabwin:show()
+  pcall(raiseWindow, "treningi_tabela")
 end
 
 -- ==========================================================================
@@ -1261,8 +1271,7 @@ function treningi.onPomoc()
   cecho("  3. Pola 'z poziomu / na poziom' licza laczny koszt przedzialu\n")
   cecho("     (wlacznie). Kolejnosc wpisow nie ma znaczenia.\n")
   cecho("  <yellow>cios specjalny<reset> - umiejetnosc specjalna z zawodu: cena\n")
-  cecho("     zawsze 100% tabeli; maks. 75% bez polecenia stowarzyszenia, 100% z\n")
-  cecho("     poleceniem (przelacznik pod polami przedzialu).\n")
+  cecho("     zawsze 100% tabeli; maks. 75%.\n")
   cecho("  <yellow>inna umiejetnosc...<reset> - wlasny procent ceny (1-100)\n")
   cecho("     i opcjonalny poziom maksymalny (puste pole = bez limitu).\n")
   cecho("Wszystkie pola zapisuja sie na dysku profilu i wracaja po restarcie.\n")
